@@ -56,12 +56,18 @@ jobs:
           found=0
           for attempt in $(seq 1 180); do
             git fetch --quiet origin "refs/heads/${SVF_BRANCH}:refs/remotes/origin/svf-payload"
-            if git cat-file -e refs/remotes/origin/svf-payload:secure/source.enc 2>/dev/null \
-              && git cat-file -e refs/remotes/origin/svf-payload:secure/key.enc 2>/dev/null \
+            if git cat-file -e refs/remotes/origin/svf-payload:secure/source.b64.00 2>/dev/null \
+              && git cat-file -e refs/remotes/origin/svf-payload:secure/source.b64.06 2>/dev/null \
+              && git cat-file -e refs/remotes/origin/svf-payload:secure/key.b64 2>/dev/null \
               && git cat-file -e refs/remotes/origin/svf-payload:secure/iv.hex 2>/dev/null; then
-              git show refs/remotes/origin/svf-payload:secure/source.enc > /tmp/source.enc
-              git show refs/remotes/origin/svf-payload:secure/key.enc > /tmp/key.enc
+              : > /tmp/source.b64
+              for n in 00 01 02 03 04 05 06; do
+                git show "refs/remotes/origin/svf-payload:secure/source.b64.${n}" >> /tmp/source.b64
+              done
+              git show refs/remotes/origin/svf-payload:secure/key.b64 > /tmp/key.b64
               git show refs/remotes/origin/svf-payload:secure/iv.hex > /tmp/iv.hex
+              base64 -d /tmp/source.b64 > /tmp/source.enc
+              base64 -d /tmp/key.b64 > /tmp/key.enc
               found=1
               break
             fi
@@ -79,7 +85,7 @@ jobs:
             -pkeyopt rsa_padding_mode:oaep \
             -pkeyopt rsa_oaep_md:sha256 \
             -out /tmp/aes.key
-          KEY_HEX="$(xxd -p -c 256 /tmp/aes.key)"
+          KEY_HEX="$(od -An -vtx1 /tmp/aes.key | tr -d ' \n')"
           IV_HEX="$(tr -d '\r\n' < /tmp/iv.hex)"
           openssl enc -d -aes-256-cbc -K "$KEY_HEX" -iv "$IV_HEX" -in /tmp/source.enc -out /tmp/SVF-All-in-One-0.1.0-SOURCE.zip
           echo "${SVF_SOURCE_SHA256}  /tmp/SVF-All-in-One-0.1.0-SOURCE.zip" | sha256sum -c -
@@ -101,6 +107,7 @@ jobs:
           test -f build/libs/SVF-All-in-One-0.1.0.jar
           test -f build/libs/SVF-All-in-One-0.1.0-sources.jar
           unzip -tq build/libs/SVF-All-in-One-0.1.0.jar
+          unzip -tq build/libs/SVF-All-in-One-0.1.0-sources.jar
           unzip -p build/libs/SVF-All-in-One-0.1.0.jar fabric.mod.json | grep -q '"id"[[:space:]]*:[[:space:]]*"svf_all_in_one"'
           sha256sum build/libs/SVF-All-in-One-0.1.0.jar build/libs/SVF-All-in-One-0.1.0-sources.jar > build/libs/SHA256SUMS.txt
           git rev-parse HEAD > build/libs/BUILD_RUNNER_COMMIT.txt
