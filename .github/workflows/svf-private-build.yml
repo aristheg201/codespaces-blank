@@ -1,0 +1,118 @@
+name: SVF private encrypted build
+
+on:
+  push:
+    branches:
+      - codex/svf-private-build
+    paths:
+      - '.github/workflows/svf-private-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SVF_BRANCH: codex/svf-private-build
+  SVF_SOURCE_SHA256: 8613015474c71f70e61819fc177f3161ac5772c49df5db0fdb39bd7c69662048
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12'
+
+      - name: Generate ephemeral build key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p handshake
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out /tmp/svf-private.pem
+          openssl pkey -in /tmp/svf-private.pem -pubout -out handshake/svf-public.pem
+          chmod 600 /tmp/svf-private.pem
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: svf-ephemeral-public-key
+          path: handshake/svf-public.pem
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Wait for encrypted source payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          for attempt in $(seq 1 180); do
+            git fetch --quiet origin "refs/heads/${SVF_BRANCH}:refs/remotes/origin/svf-payload"
+            if git cat-file -e refs/remotes/origin/svf-payload:secure/source.enc 2>/dev/null \
+              && git cat-file -e refs/remotes/origin/svf-payload:secure/key.enc 2>/dev/null \
+              && git cat-file -e refs/remotes/origin/svf-payload:secure/iv.hex 2>/dev/null; then
+              git show refs/remotes/origin/svf-payload:secure/source.enc > /tmp/source.enc
+              git show refs/remotes/origin/svf-payload:secure/key.enc > /tmp/key.enc
+              git show refs/remotes/origin/svf-payload:secure/iv.hex > /tmp/iv.hex
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" -eq 1
+
+      - name: Decrypt and verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl pkeyutl -decrypt \
+            -inkey /tmp/svf-private.pem \
+            -in /tmp/key.enc \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -out /tmp/aes.key
+          KEY_HEX="$(xxd -p -c 256 /tmp/aes.key)"
+          IV_HEX="$(tr -d '\r\n' < /tmp/iv.hex)"
+          openssl enc -d -aes-256-cbc -K "$KEY_HEX" -iv "$IV_HEX" -in /tmp/source.enc -out /tmp/SVF-All-in-One-0.1.0-SOURCE.zip
+          echo "${SVF_SOURCE_SHA256}  /tmp/SVF-All-in-One-0.1.0-SOURCE.zip" | sha256sum -c -
+          unzip -tq /tmp/SVF-All-in-One-0.1.0-SOURCE.zip
+          rm -rf build-src
+          mkdir build-src
+          unzip -q /tmp/SVF-All-in-One-0.1.0-SOURCE.zip -d build-src
+          shred -u /tmp/svf-private.pem /tmp/aes.key /tmp/key.enc /tmp/source.enc || true
+
+      - name: Compile, test and remap Fabric jar
+        working-directory: build-src/SVF-All-in-One-0.1.0-SOURCE
+        run: gradle --no-daemon clean test remapJar sourcesJar --stacktrace
+
+      - name: Verify release artifacts
+        working-directory: build-src/SVF-All-in-One-0.1.0-SOURCE
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f build/libs/SVF-All-in-One-0.1.0.jar
+          test -f build/libs/SVF-All-in-One-0.1.0-sources.jar
+          unzip -tq build/libs/SVF-All-in-One-0.1.0.jar
+          unzip -p build/libs/SVF-All-in-One-0.1.0.jar fabric.mod.json | grep -q '"id"[[:space:]]*:[[:space:]]*"svf_all_in_one"'
+          sha256sum build/libs/SVF-All-in-One-0.1.0.jar build/libs/SVF-All-in-One-0.1.0-sources.jar > build/libs/SHA256SUMS.txt
+          git rev-parse HEAD > build/libs/BUILD_RUNNER_COMMIT.txt
+          ls -lah build/libs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SVF-All-in-One-0.1.0-production
+          path: |
+            build-src/SVF-All-in-One-0.1.0-SOURCE/build/libs/SVF-All-in-One-0.1.0.jar
+            build-src/SVF-All-in-One-0.1.0-SOURCE/build/libs/SVF-All-in-One-0.1.0-sources.jar
+            build-src/SVF-All-in-One-0.1.0-SOURCE/build/libs/SHA256SUMS.txt
+            build-src/SVF-All-in-One-0.1.0-SOURCE/build/libs/BUILD_RUNNER_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 7
