@@ -24,12 +24,21 @@ jobs:
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
           tar -xzf manager-src.tar.gz -C manager
+
           $pkg = Get-Content manager/package.json -Raw
           $pkg = $pkg.Replace('"p-limit": "^6.2.0"', '"p-limit": "^3.1.0"')
+          $pkg = $pkg.Replace('"main": "dist/main/index.cjs"', '"main": "dist/main/main/index.js"')
           Set-Content manager/package.json $pkg -Encoding utf8
+
           $iconScript = Get-Content manager/scripts/make-icon.cjs -Raw
           $iconScript = $iconScript.Replace("const pngToIco = require('png-to-ico');", "const pngToIcoModule = require('png-to-ico'); const pngToIco = pngToIcoModule.default || pngToIcoModule;")
           Set-Content manager/scripts/make-icon.cjs $iconScript -Encoding utf8
+
+          $mainScript = Get-Content manager/src/main/index.ts -Raw
+          $mainScript = $mainScript.Replace("path.join(__dirname, '..', 'preload', 'index.cjs')", "path.join(__dirname, '..', 'preload', 'index.js')")
+          $mainScript = $mainScript.Replace("path.join(__dirname, '..', 'renderer', 'index.html')", "path.join(__dirname, '..', '..', 'renderer', 'index.html')")
+          Set-Content manager/src/main/index.ts $mainScript -Encoding utf8
+
           if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
 
       - uses: actions/setup-node@v4
