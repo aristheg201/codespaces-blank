@@ -1,9 +1,9 @@
-name: Build Bestiary Launcher 5.0.0
+name: Build Bestiary Launcher 5.0.1
 
 on:
   push:
     branches:
-      - bestiary-installer-5-0-0
+      - bestiary-launcher-v5-syncfix
   pull_request:
     branches:
       - main
@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: bestiary-installer-5-0-0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,6 +59,10 @@ jobs:
           [IO.File]::WriteAllBytes("$PWD/source/resources/logo.png", [Convert]::FromBase64String($logoB64))
           Copy-Item "$PWD/source/resources/logo.png" "$PWD/source/src/renderer/public/logo.png" -Force
 
+          Push-Location source
+          npm pkg set version=5.0.1
+          Pop-Location
+
       - name: Generate Windows icon
         shell: pwsh
         run: |
@@ -91,6 +93,11 @@ jobs:
         shell: pwsh
         run: npm install --no-audit --no-fund
 
+      - name: Typecheck
+        working-directory: source
+        shell: pwsh
+        run: npm run typecheck
+
       - name: Build NSIS installer
         working-directory: source
         shell: pwsh
@@ -100,19 +107,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.0.0.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.0.1.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer not produced" }
           if ($installer.Length -lt 1000000) { throw "Installer is unexpectedly small: $($installer.Length)" }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
-          Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe" -Force
-          "$hash  BestiaryLauncher-Setup-5.0.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/SHA256SUMS.txt"
+          Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.0.1.exe" -Force
+          "$hash  BestiaryLauncher-Setup-5.0.1.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.0.1-SHA256.txt"
 
       - name: Smoke-test NSIS silent install
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $installer = "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe"
+          $installer = "$PWD/build-output/BestiaryLauncher-Setup-5.0.1.exe"
           $proc = Start-Process -FilePath $installer -ArgumentList "/S" -PassThru -Wait
           if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
           Start-Sleep -Seconds 2
@@ -123,30 +130,9 @@ jobs:
       - name: Upload verified installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.0.0
+          name: BestiaryLauncher-Windows-5.0.1
           path: |
-            build-output/BestiaryLauncher-Setup-5.0.0.exe
-            build-output/SHA256SUMS.txt
+            build-output/BestiaryLauncher-Setup-5.0.1.exe
+            build-output/BestiaryLauncher-Setup-5.0.1-SHA256.txt
           if-no-files-found: error
           retention-days: 7
-
-      - name: Publish build release
-        if: github.event_name != 'pull_request'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $tag = "bestiary-launcher-v5.0.0-build"
-          gh release view $tag --repo "$env:GITHUB_REPOSITORY" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release delete $tag --yes --cleanup-tag --repo "$env:GITHUB_REPOSITORY"
-            if ($LASTEXITCODE -ne 0) { throw "Unable to remove previous build release" }
-          }
-          gh release create $tag `
-            "build-output/BestiaryLauncher-Setup-5.0.0.exe" `
-            "build-output/SHA256SUMS.txt" `
-            --repo "$env:GITHUB_REPOSITORY" `
-            --title "Bestiary Launcher 5.0.0 Build" `
-            --notes "Automated Windows x64 NSIS build."
-          if ($LASTEXITCODE -ne 0) { throw "Unable to publish build release" }
