@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - bestiary-launcher-v5-0-2-source2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
