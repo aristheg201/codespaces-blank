@@ -33,6 +33,7 @@ jobs:
           Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
           Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
           node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
 
           New-Item -ItemType Directory -Force manager/src/renderer/public | Out-Null
           Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
@@ -89,15 +90,15 @@ jobs:
       - name: Create SHA256
         shell: pwsh
         run: |
-          $exe = Get-Item manager/release/BestiaryPackManager-Setup-6.0.1.exe
+          $exe = Get-Item manager/release/BestiaryPackManager-Setup-6.0.2.exe
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.0.1-SHA256.txt -Encoding ascii
+          "$hash  $($exe.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.0.2-SHA256.txt -Encoding ascii
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.0.1
+          name: BestiaryPackManager-Windows-6.0.2
           path: |
-            manager/release/BestiaryPackManager-Setup-6.0.1.exe
-            manager/release/BestiaryPackManager-Setup-6.0.1-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.0.2.exe
+            manager/release/BestiaryPackManager-Setup-6.0.2-SHA256.txt
           if-no-files-found: error
           retention-days: 7
