@@ -30,6 +30,34 @@ jobs:
           New-Item -ItemType Directory -Force manager/resources/gh | Out-Null
           Copy-Item (Get-Command gh).Source manager/resources/gh/gh.exe -Force
 
+          New-Item -ItemType Directory -Force manager/build | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $source = [System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
+          try {
+            $bitmap = New-Object System.Drawing.Bitmap 512, 512
+            try {
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              try {
+                $graphics.Clear([System.Drawing.Color]::Transparent)
+                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $maxW = 440.0
+                $maxH = 440.0
+                $scale = [Math]::Min($maxW / $source.Width, $maxH / $source.Height)
+                $w = [int]($source.Width * $scale)
+                $h = [int]($source.Height * $scale)
+                $x = [int]((512 - $w) / 2)
+                $y = [int]((512 - $h) / 2)
+                $graphics.DrawImage($source, $x, $y, $w, $h)
+              } finally { $graphics.Dispose() }
+              $bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally { $bitmap.Dispose() }
+          } finally { $source.Dispose() }
+
+          $builder = Get-Content manager/electron-builder.json -Raw
+          $builder = $builder.Replace('"icon": "resources/logo.png"', '"icon": "build/icon.png"')
+          Set-Content manager/electron-builder.json $builder -Encoding utf8
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
