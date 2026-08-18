@@ -48,6 +48,7 @@ jobs:
           [IO.File]::WriteAllBytes("$PWD/source.tar.gz", [Convert]::FromBase64String($sourceB64))
           tar -xzf "$PWD/source.tar.gz" -C "$PWD/source"
           if ($LASTEXITCODE -ne 0) { throw "Unable to extract source archive" }
+          Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
 
           $logoPartNames = @(
             "logo5-00a", "logo5-00b", "logo5-01a", "logo5-01b", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
