@@ -1,0 +1,8 @@
+{
+  "brand": "Bestiary",
+  "configUrl": "https://raw.githubusercontent.com/aristheg201/website/main/svf-client/config.json",
+  "fallbackChannelUrl": "https://raw.githubusercontent.com/aristheg201/website/main/svf-client/channels/stable.json",
+  "fallbackAnnouncementsUrl": "https://raw.githubusercontent.com/aristheg201/website/main/svf-client/announcements.json",
+  "minecraftVersion": "1.21.1",
+  "fabricLoader": "0.18.4"
+}
