@@ -50,7 +50,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unable to extract source archive" }
 
           $logoPartNames = @(
-            "logo5-00", "logo5-01", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
+            "logo5-00a", "logo5-00b", "logo5-01a", "logo5-01b", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
           )
           $logoB64 = ($logoPartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           New-Item -ItemType Directory -Force "$PWD/source/resources" | Out-Null
@@ -106,6 +106,19 @@ jobs:
           "$hash  BestiaryLauncher-Setup-5.0.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/SHA256SUMS.txt"
           Get-Item "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe" | Format-List Name,Length,FullName
           Get-Content "$PWD/build-output/SHA256SUMS.txt"
+
+      - name: Smoke-test NSIS silent install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe"
+          $proc = Start-Process -FilePath $installer -ArgumentList "/S" -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
+          Start-Sleep -Seconds 2
+          $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Launcher.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installed) { throw "Installed Bestiary Launcher executable was not found under LOCALAPPDATA Programs" }
+          if ($installed.Length -lt 1000000) { throw "Installed launcher executable is unexpectedly small" }
+          Write-Host "Installed launcher: $($installed.FullName)"
 
       - name: Publish build release
         if: github.event_name != 'pull_request'
