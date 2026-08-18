@@ -107,8 +107,6 @@ jobs:
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
           Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe" -Force
           "$hash  BestiaryLauncher-Setup-5.0.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/SHA256SUMS.txt"
-          Get-Item "$PWD/build-output/BestiaryLauncher-Setup-5.0.0.exe" | Format-List Name,Length,FullName
-          Get-Content "$PWD/build-output/SHA256SUMS.txt"
 
       - name: Smoke-test NSIS silent install
         shell: pwsh
@@ -121,7 +119,16 @@ jobs:
           $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Launcher.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $installed) { throw "Installed Bestiary Launcher executable was not found under LOCALAPPDATA Programs" }
           if ($installed.Length -lt 1000000) { throw "Installed launcher executable is unexpectedly small" }
-          Write-Host "Installed launcher: $($installed.FullName)"
+
+      - name: Upload verified installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.0.0
+          path: |
+            build-output/BestiaryLauncher-Setup-5.0.0.exe
+            build-output/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish build release
         if: github.event_name != 'pull_request'
