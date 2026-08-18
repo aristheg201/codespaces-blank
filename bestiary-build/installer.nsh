@@ -1,6 +1,6 @@
 !include "LogicLib.nsh"
 
-!macro customInstallMode
+!macro customInstallmode
   StrCpy $isForceCurrentInstall "1"
 !macroend
 
