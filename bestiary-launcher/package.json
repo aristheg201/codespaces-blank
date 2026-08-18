@@ -1,0 +1,44 @@
+{
+  "name": "bestiary-launcher",
+  "version": "5.0.0",
+  "private": true,
+  "main": "dist/main/index.js",
+  "description": "Bestiary Minecraft Launcher",
+  "author": "Bestiary",
+  "license": "UNLICENSED",
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true});require('fs').rmSync('release',{recursive:true,force:true})\"",
+    "icon": "node scripts/make-icon.cjs",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build": "npm run clean && npm run icon && npm run build:main && npm run build:renderer",
+    "dist:win": "npm run build && electron-builder --config electron-builder.json --win nsis --x64"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "axios": "^1.8.4",
+    "fs-extra": "^11.3.0",
+    "minecraft-launcher-core": "^3.18.2",
+    "p-limit": "^3.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
+    "png-to-ico": "^3.0.1",
+    "postcss": "^8.5.3",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}
