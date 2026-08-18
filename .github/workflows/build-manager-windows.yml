@@ -27,6 +27,9 @@ jobs:
           $pkg = Get-Content manager/package.json -Raw
           $pkg = $pkg.Replace('"p-limit": "^6.2.0"', '"p-limit": "^3.1.0"')
           Set-Content manager/package.json $pkg -Encoding utf8
+          $iconScript = Get-Content manager/scripts/make-icon.cjs -Raw
+          $iconScript = $iconScript.Replace("const pngToIco = require('png-to-ico');", "const pngToIcoModule = require('png-to-ico'); const pngToIco = pngToIcoModule.default || pngToIcoModule;")
+          Set-Content manager/scripts/make-icon.cjs $iconScript -Encoding utf8
           if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
 
       - uses: actions/setup-node@v4
