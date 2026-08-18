@@ -1,16 +1,22 @@
 import axios from 'axios';
 import {
-  DEFAULT_ANNOUNCEMENTS_URL,
-  DEFAULT_CHANNEL_URL,
   DEFAULT_FABRIC_LOADER,
   DEFAULT_MINECRAFT_VERSION,
   DEFAULT_SERVER_PORT,
-  REMOTE_CONFIG_URL,
 } from '../../shared/constants';
 import type { RemoteReleaseInfo } from '../../shared/ipc';
 
+const DISTRIBUTION_BASE =
+  'https://raw.githubusercontent.com/aristheg201/bestiary-distribution/main/bestiary-distribution';
+const REMOTE_CONFIG_URL = `${DISTRIBUTION_BASE}/config.json`;
+const DEFAULT_STABLE_CHANNEL_URL = `${DISTRIBUTION_BASE}/channels/stable.json`;
+const DEFAULT_TESTING_CHANNEL_URL = `${DISTRIBUTION_BASE}/channels/testing.json`;
+const DEFAULT_ANNOUNCEMENTS_URL = `${DISTRIBUTION_BASE}/announcements.json`;
+
 interface RemoteConfig {
   channelUrl?: string;
+  stableChannelUrl?: string;
+  testingChannelUrl?: string;
   announcementsUrl?: string;
   discordUrl?: string;
   serverHost?: string;
@@ -22,6 +28,7 @@ interface RemoteConfig {
 interface ChannelPointer {
   version?: string;
   manifest?: string;
+  manifestUrl?: string;
 }
 
 interface Announcement {
@@ -36,21 +43,25 @@ export class RemoteService {
     const config: RemoteConfig = await this.fetchJson<RemoteConfig>(REMOTE_CONFIG_URL).catch(
       (): RemoteConfig => ({}),
     );
-    const channelUrl = this.isHttpUrl(config.channelUrl) ? config.channelUrl : DEFAULT_CHANNEL_URL;
-    const announcementsUrl = this.isHttpUrl(config.announcementsUrl)
-      ? config.announcementsUrl
-      : DEFAULT_ANNOUNCEMENTS_URL;
+
+    const stableChannelUrl = this.pickUrl(
+      config.stableChannelUrl ?? config.channelUrl,
+      DEFAULT_STABLE_CHANNEL_URL,
+    );
+    const testingChannelUrl = this.pickUrl(config.testingChannelUrl, DEFAULT_TESTING_CHANNEL_URL);
+    const announcementsUrl = this.pickUrl(config.announcementsUrl, DEFAULT_ANNOUNCEMENTS_URL);
 
     const [channel, announcements] = await Promise.all([
-      this.fetchJson<ChannelPointer>(channelUrl).catch((): ChannelPointer => ({})),
-      this.fetchJson<unknown>(announcementsUrl).catch((): unknown => ({ announcements: [] })),
+      this.fetchChannelWithBootstrapFallback(stableChannelUrl, testingChannelUrl),
+      this.fetchJson<unknown>(announcementsUrl).catch((): unknown => ({ items: [] })),
     ]);
 
     const announcement = this.pickAnnouncement(announcements);
+    const manifestCandidate = channel.manifestUrl ?? channel.manifest;
 
     return {
       version: typeof channel.version === 'string' && channel.version.trim() ? channel.version.trim() : null,
-      manifestUrl: this.isHttpUrl(channel.manifest) ? channel.manifest : null,
+      manifestUrl: this.isHttpUrl(manifestCandidate) ? manifestCandidate : null,
       announcementTitle: announcement.title,
       announcementBody: announcement.body,
       discordUrl: this.isHttpUrl(config.discordUrl) ? config.discordUrl : '',
@@ -70,14 +81,36 @@ export class RemoteService {
     };
   }
 
+  private static async fetchChannelWithBootstrapFallback(
+    stableChannelUrl: string,
+    testingChannelUrl: string,
+  ): Promise<ChannelPointer> {
+    try {
+      return await this.fetchJson<ChannelPointer>(stableChannelUrl);
+    } catch {
+      // The very first Bestiary release may exist only on testing before a stable pointer is created.
+      // Once stable.json exists, normal launchers will always use it and testing no longer leaks to players.
+      return this.fetchJson<ChannelPointer>(testingChannelUrl).catch((): ChannelPointer => ({}));
+    }
+  }
+
+  private static pickUrl(value: unknown, fallback: string): string {
+    return this.isHttpUrl(value) ? value : fallback;
+  }
+
   private static async fetchJson<T>(url: string): Promise<T> {
     const response = await axios.get<T>(url, {
       timeout: 15_000,
       responseType: 'json',
       validateStatus: (status) => status >= 200 && status < 300,
       headers: {
-        'User-Agent': 'BestiaryLauncher/5.0.0',
+        'User-Agent': 'BestiaryLauncher/5.0.1',
         Accept: 'application/json',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      params: {
+        t: Date.now(),
       },
     });
     return response.data;
@@ -101,7 +134,11 @@ export class RemoteService {
 
     if (!raw || typeof raw !== 'object') return fallback;
     const obj = raw as Record<string, unknown>;
-    const list = Array.isArray(obj.announcements) ? obj.announcements : [];
+    const list = Array.isArray(obj.items)
+      ? obj.items
+      : Array.isArray(obj.announcements)
+        ? obj.announcements
+        : [];
     const item = list.find((entry) => entry && typeof entry === 'object') as Announcement | undefined;
     if (!item) return fallback;
 
