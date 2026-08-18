@@ -1,0 +1,69 @@
+name: Build Bestiary Pack Manager Windows
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct manager source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts = Get-ChildItem manager-src-v2/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 4) { throw "Expected 4 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          $pkg = Get-Content manager/package.json -Raw
+          $pkg = $pkg.Replace('"p-limit": "^6.2.0"', '"p-limit": "^3.1.0"')
+          Set-Content manager/package.json $pkg -Encoding utf8
+          if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: manager/package.json
+
+      - name: Install dependencies
+        working-directory: manager
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck renderer
+        working-directory: manager
+        shell: pwsh
+        run: npx tsc -p tsconfig.renderer.json --noEmit
+
+      - name: Build NSIS installer
+        working-directory: manager
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win
+
+      - name: Create SHA256
+        shell: pwsh
+        run: |
+          $exe = Get-Item manager/release/BestiaryPackManager-Setup-5.0.0.exe
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-5.0.0-SHA256.txt -Encoding ascii
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryPackManager-Windows-5.0.0
+          path: |
+            manager/release/BestiaryPackManager-Setup-5.0.0.exe
+            manager/release/BestiaryPackManager-Setup-5.0.0-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
