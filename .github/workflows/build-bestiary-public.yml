@@ -1,0 +1,78 @@
+name: Build Bestiary Windows Installer
+
+on:
+  push:
+    branches:
+      - bestiary-launcher-build-5
+    paths:
+      - "bestiary-launcher/**"
+      - ".github/workflows/build-bestiary-public.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    defaults:
+      run:
+        working-directory: bestiary-launcher
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund 2>&1 | Tee-Object build-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build application
+        shell: pwsh
+        run: |
+          npm run clean
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run icon
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force src/renderer/public | Out-Null
+          Copy-Item resources/logo.png src/renderer/public/logo.png -Force
+          npm run build:main 2>&1 | Tee-Object build-main.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build:renderer 2>&1 | Tee-Object build-renderer.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx electron-builder --config electron-builder.json --win nsis --x64 2>&1 | Tee-Object build-package.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installer and hash
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release/BestiaryLauncher-Setup-*.exe | Select-Object -First 1
+          if (-not $exe) { throw "Installer was not produced" }
+          if ($exe.Length -lt 50000000) { throw "Installer unexpectedly small: $($exe.Length) bytes" }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($exe.Name)" | Set-Content release/SHA256SUMS.txt -Encoding ascii
+          Write-Host "Installer: $($exe.Name) $($exe.Length) bytes"
+          Write-Host "SHA256: $hash"
+
+      - name: Publish build release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: bestiary-launcher-5.0.0-build
+          name: Bestiary Launcher 5.0.0 Windows Build
+          prerelease: true
+          make_latest: false
+          files: |
+            bestiary-launcher/release/BestiaryLauncher-Setup-5.0.0.exe
+            bestiary-launcher/release/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          overwrite_files: true
