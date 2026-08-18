@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - bestiary-manager-v7-rebuild
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
