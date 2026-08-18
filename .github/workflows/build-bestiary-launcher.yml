@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - bestiary-installer-5-0-0
-    paths:
-      - "bestiary-build/**"
-      - ".github/workflows/build-bestiary-launcher.yml"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -41,16 +41,18 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force source | Out-Null
 
-          $sourceParts = Get-ChildItem "bestiary-build/src5-*" | Sort-Object Name
-          if ($sourceParts.Count -ne 6) { throw "Expected 6 source chunks, got $($sourceParts.Count)" }
-          $sourceB64 = ($sourceParts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ""
+          $sourcePartNames = @(
+            "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
+          )
+          $sourceB64 = ($sourcePartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           [IO.File]::WriteAllBytes("$PWD/source.tar.gz", [Convert]::FromBase64String($sourceB64))
           tar -xzf "$PWD/source.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract source archive" }
 
-          $logoParts = Get-ChildItem "bestiary-build/logo5-*" | Sort-Object Name
-          if ($logoParts.Count -ne 5) { throw "Expected 5 logo chunks, got $($logoParts.Count)" }
-          $logoB64 = ($logoParts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ""
-
+          $logoPartNames = @(
+            "logo5-00", "logo5-01", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
+          )
+          $logoB64 = ($logoPartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           New-Item -ItemType Directory -Force "$PWD/source/resources" | Out-Null
           New-Item -ItemType Directory -Force "$PWD/source/src/renderer/public" | Out-Null
           [IO.File]::WriteAllBytes("$PWD/source/resources/logo.png", [Convert]::FromBase64String($logoB64))
@@ -106,6 +108,7 @@ jobs:
           Get-Content "$PWD/build-output/SHA256SUMS.txt"
 
       - name: Publish build release
+        if: github.event_name != 'pull_request'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
