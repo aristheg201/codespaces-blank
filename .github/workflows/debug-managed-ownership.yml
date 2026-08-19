@@ -1,4 +1,4 @@
-name: Debug Launcher Renderer Source
+name: Debug Launcher Current Source
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct full launcher source before final fixes
+      - name: Reconstruct full launcher source
         shell: bash
         run: |
           set -euo pipefail
@@ -52,12 +52,23 @@ jobs:
               target.parent.mkdir(parents=True,exist_ok=True)
               target.write_bytes(raw[data0:data0+size])
           PY
-          echo '=== renderer files ==='
-          find source/src/renderer -maxdepth 4 -type f | sort
-      - name: Upload original renderer source
+          cp bestiary-v510-final/fixes/ipc.ts source/src/shared/ipc.ts
+          cp bestiary-v510-final/fixes/SettingsStore.ts source/src/main/core/SettingsStore.ts
+          cp bestiary-v510-final/fixes/preload-index.ts source/src/preload/index.ts
+          cp bestiary-v510-final/fixes/App.tsx source/src/renderer/src/App.tsx
+          cp bestiary-v510-final/fixes/Home.tsx source/src/renderer/src/components/Home.tsx
+          cp bestiary-v510-final/fixes/Home.css source/src/renderer/src/components/Home.css
+          cp bestiary-v510-final/fixes/UxPanels.css source/src/renderer/src/components/UxPanels.css
+          cp bestiary-v510-final/fixes/ProfileChooser.tsx source/src/renderer/src/components/ProfileChooser.tsx
+          cp bestiary-v510-final/fixes/SettingsModal.tsx source/src/renderer/src/components/SettingsModal.tsx
+          cp bestiary-v510-final/fixes/AnnouncementModal.tsx source/src/renderer/src/components/AnnouncementModal.tsx
+          cp bestiary-v510-final/fixes/DiscordText.tsx source/src/renderer/src/components/DiscordText.tsx
+          echo '=== current launcher source ==='
+          find source/src -maxdepth 4 -type f | sort
+      - name: Upload current source
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-original-renderer-source
-          path: source/src/renderer
+          name: launcher-current-source
+          path: source/src
           if-no-files-found: error
           retention-days: 1
