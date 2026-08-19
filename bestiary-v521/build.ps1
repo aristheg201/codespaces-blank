@@ -5,8 +5,8 @@ Set-Location $repoRoot
 $source = Get-Content './bestiary-v520/build.ps1' -Raw
 $source = $source.Replace('5.2.0', '5.2.1').Replace('build-output-v520', 'build-output-v521')
 
-$homePatch = "python 'bestiary-v520/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch Launcher Home.' }"
-if (-not $source.Contains($homePatch)) { throw 'Launcher 5.2.0 Home patch marker missing.' }
+$homePatch = "python 'bestiary-v520/patch_home.py'"
+if (-not $source.Contains($homePatch)) { throw 'Launcher Home patch command missing.' }
 $source = $source.Replace($homePatch, $homePatch + "`npython 'bestiary-v521/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }")
 
 $generated = Join-Path $PSScriptRoot 'generated-build.ps1'
