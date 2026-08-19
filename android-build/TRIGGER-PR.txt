@@ -1,0 +1,1 @@
+Trigger pull_request Android APK CI after base workflow installation.
