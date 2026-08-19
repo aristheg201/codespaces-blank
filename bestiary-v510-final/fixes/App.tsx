@@ -7,6 +7,7 @@ import { ProfileChooser } from './components/ProfileChooser';
 import { AnnouncementModal } from './components/AnnouncementModal';
 import { useLauncherStore } from './store/launcherStore';
 import type { ClientProfileId, LauncherSettings } from '../../shared/ipc';
+import './components/LauncherUx.css';
 
 export function App() {
   const store = useLauncherStore();
