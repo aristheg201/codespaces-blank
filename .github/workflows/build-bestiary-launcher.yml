@@ -1,4 +1,4 @@
-name: Build Bestiary Launcher 5.3.0
+name: Build Bestiary Launcher 5.3.1
 
 on:
   push:
@@ -46,23 +46,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build and runtime-test Launcher 5.3.0
+      - name: Build and runtime-test Launcher 5.3.1
         shell: pwsh
         run: ./bestiary-v530/build.ps1
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.3.0
+          name: BestiaryLauncher-Windows-5.3.1
           path: |
-            build-output-v530/BestiaryLauncher-Setup-5.3.0.exe
-            build-output-v530/BestiaryLauncher-Setup-5.3.0-SHA256.txt
-            build-output-v530/BestiaryLauncher-Portable-5.3.0.zip
-            build-output-v530/BestiaryLauncher-Portable-5.3.0-SHA256.txt
-            build-output-v530/bestiary-skin-bridge-1.0.0.jar
-            build-output-v530/bestiary-skin-bridge-1.0.0-SHA256.txt
-            build-output-v530/runtime-smoke-stdout.log
-            build-output-v530/runtime-smoke-stderr.log
+            build-output-v531/BestiaryLauncher-Setup-5.3.1.exe
+            build-output-v531/BestiaryLauncher-Setup-5.3.1-SHA256.txt
+            build-output-v531/BestiaryLauncher-Portable-5.3.1.zip
+            build-output-v531/BestiaryLauncher-Portable-5.3.1-SHA256.txt
+            build-output-v531/bestiary-skin-bridge-1.0.0.jar
+            build-output-v531/bestiary-skin-bridge-1.0.0-SHA256.txt
+            build-output-v531/runtime-smoke-stdout.log
+            build-output-v531/runtime-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
 
@@ -73,9 +73,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'launcher-v5.3.0'
+          $tag = 'launcher-v5.3.1'
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.0' --notes 'Microsoft Minecraft Java login, account-aware launch, official and offline Bestiary skin management, bundled Skin Bridge.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.1' --notes 'Hotfix Minecraft process lifecycle state: Play button returns to ready immediately after Minecraft exits. Microsoft login, skin management, bundled Skin Bridge, and SHA-256 updater remain intact.'
           }
-          gh release upload $tag build-output-v530/BestiaryLauncher-Setup-5.3.0.exe build-output-v530/BestiaryLauncher-Setup-5.3.0-SHA256.txt build-output-v530/BestiaryLauncher-Portable-5.3.0.zip build-output-v530/BestiaryLauncher-Portable-5.3.0-SHA256.txt build-output-v530/bestiary-skin-bridge-1.0.0.jar build-output-v530/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
+          gh release upload $tag build-output-v531/BestiaryLauncher-Setup-5.3.1.exe build-output-v531/BestiaryLauncher-Setup-5.3.1-SHA256.txt build-output-v531/BestiaryLauncher-Portable-5.3.1.zip build-output-v531/BestiaryLauncher-Portable-5.3.1-SHA256.txt build-output-v531/bestiary-skin-bridge-1.0.0.jar build-output-v531/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
