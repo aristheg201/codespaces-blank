@@ -2,22 +2,43 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoRoot
 
-$source = Get-Content './bestiary-v521/build.ps1' -Raw
-$source = $source.Replace('5.2.1', '5.3.0').Replace('build-output-v521', 'build-output-v530')
+$source = Get-Content './bestiary-v513/build.ps1' -Raw
+$source = $source.Replace('5.1.3', '5.3.0').Replace('build-output-v513', 'build-output-v530')
 
-$patchCommand = "python 'bestiary-v521/patch_home.py'"
-if (-not $source.Contains($patchCommand)) { throw '5.2.1 patch command marker missing.' }
-$patch530 = @'
-python 'bestiary-v521/patch_home.py'
-if ($LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }
-python 'bestiary-v530/patch_v530.py'
-if ($LASTEXITCODE -ne 0) { throw 'Unable to apply Microsoft auth + skin patch.' }
-python 'bestiary-v530/patch_bridge_package.py'
-if ($LASTEXITCODE -ne 0) { throw 'Unable to switch Skin Bridge to ASAR-safe packaging.' }
-$bridge = Get-Item 'bestiary-skin-bridge/build/libs/bestiary-skin-bridge-1.0.0.jar' -ErrorAction Stop
-Copy-Item $bridge.FullName "$PWD/source/resources/bestiary-skin-bridge-1.0.0.jar" -Force
-'@
-$source = $source.Replace($patchCommand, $patch530.Trim())
+$homeCss = "Copy-Item 'bestiary-v510-final/fixes/Home.css' `"`$PWD/source/src/renderer/src/components/Home.css`" -Force"
+if (-not $source.Contains($homeCss)) { throw 'Home.css copy marker missing.' }
+$copies = $homeCss + "`n" +
+  "Copy-Item 'bestiary-v510-final/fixes/UxPanels.css' `"`$PWD/source/src/renderer/src/components/UxPanels.css`" -Force`n" +
+  "Copy-Item 'bestiary-v510-final/fixes/LauncherUx.css' `"`$PWD/source/src/renderer/src/components/LauncherUx.css`" -Force`n" +
+  "Copy-Item 'bestiary-v510-final/fixes/DiscordText.tsx' `"`$PWD/source/src/renderer/src/components/DiscordText.tsx`" -Force`n" +
+  "Copy-Item 'bestiary-v510-final/fixes/AnnouncementModal.tsx' `"`$PWD/source/src/renderer/src/components/AnnouncementModal.tsx`" -Force`n" +
+  "Copy-Item 'bestiary-v515/fixes/ContentManager.ts' `"`$PWD/source/src/main/core/ContentManager.ts`" -Force`n" +
+  "Copy-Item 'bestiary-v515/fixes/LibraryModal.tsx' `"`$PWD/source/src/renderer/src/components/LibraryModal.tsx`" -Force`n" +
+  "Copy-Item 'bestiary-v515/fixes/LibraryUx.css' `"`$PWD/source/src/renderer/src/components/LibraryUx.css`" -Force`n" +
+  "Copy-Item 'bestiary-v520/fixes/ContentScreen.tsx' `"`$PWD/source/src/renderer/src/components/ContentScreen.tsx`" -Force`n" +
+  "Copy-Item 'bestiary-v520/fixes/ContentScreen.css' `"`$PWD/source/src/renderer/src/components/ContentScreen.css`" -Force`n" +
+  "Copy-Item 'bestiary-v520/fixes/AppUpdate.css' `"`$PWD/source/src/renderer/src/components/AppUpdate.css`" -Force`n" +
+  "Copy-Item 'bestiary-v520/fixes/AppUpdater.ts' `"`$PWD/source/src/main/core/AppUpdater.ts`" -Force`n" +
+  "Copy-Item 'bestiary-v530/fixes/ipc.ts' `"`$PWD/source/src/shared/ipc.ts`" -Force`n" +
+  "Copy-Item 'bestiary-v530/fixes/preload-index.ts' `"`$PWD/source/src/preload/index.ts`" -Force`n" +
+  "Copy-Item 'bestiary-v530/fixes/AccountService.ts' `"`$PWD/source/src/main/core/AccountService.ts`" -Force`n" +
+  "Copy-Item 'bestiary-v530/fixes/AccountScreen.tsx' `"`$PWD/source/src/renderer/src/components/AccountScreen.tsx`" -Force`n" +
+  "Copy-Item 'bestiary-v530/fixes/AccountScreen.css' `"`$PWD/source/src/renderer/src/components/AccountScreen.css`" -Force"
+$source = $source.Replace($homeCss, $copies)
+
+$builderCopy = "Copy-Item 'bestiary-build/electron-builder.json' `"`$PWD/source/electron-builder.json`" -Force"
+if (-not $source.Contains($builderCopy)) { throw 'electron-builder copy marker missing.' }
+$patches = $builderCopy + "`n" +
+  "python 'bestiary-v514/patch_sync_profile.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch Full/Lite sync semantics.' }`n" +
+  "python 'bestiary-v515/patch_android_manifest.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to preserve Android profile entries.' }`n" +
+  "python 'bestiary-v515/patch_library.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch client library IPC.' }`n" +
+  "python 'bestiary-v520/patch_main.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to wire app updater.' }`n" +
+  "python 'bestiary-v520/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch Launcher Home.' }`n" +
+  "python 'bestiary-v521/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }`n" +
+  "python 'bestiary-v530/patch_v530.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply Microsoft auth + skin patch.' }`n" +
+  "python 'bestiary-v530/patch_bridge_package.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to switch Skin Bridge to ASAR-safe packaging.' }`n" +
+  "Copy-Item 'bestiary-skin-bridge/build/libs/bestiary-skin-bridge-1.0.0.jar' `"`$PWD/source/resources/bestiary-skin-bridge-1.0.0.jar`" -Force"
+$source = $source.Replace($builderCopy, $patches)
 
 $generated = Join-Path $PSScriptRoot 'generated-build.ps1'
 Set-Content $generated $source -Encoding UTF8
