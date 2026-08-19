@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+  workflow_run:
+    workflows: ["Debug Manager 6.0.3 Source"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -103,6 +106,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -113,6 +120,11 @@ jobs:
           set -euo pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Apply Manager compatibility patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python android-manager/patch_manager.py
       - name: Verify Manager security and runtime contract
         shell: bash
         run: |
@@ -121,6 +133,7 @@ jobs:
           grep -q 'loaderVersion' android-manager/app/src/main/java/vn/svframe/bestiary/manager/GithubDistributionService.java
           grep -q 'javaMajor' android-manager/app/src/main/java/vn/svframe/bestiary/manager/GithubDistributionService.java
           grep -q 'ACTION_OPEN_DOCUMENT_TREE' android-manager/app/src/main/java/vn/svframe/bestiary/manager/MainActivity.java
+          grep -q 'announcementRoot' android-manager/app/src/main/java/vn/svframe/bestiary/manager/GithubDistributionService.java
           ! grep -R -E 'ghp_[A-Za-z0-9]|github_pat_' android-manager
       - name: Build Manager APK
         shell: bash
