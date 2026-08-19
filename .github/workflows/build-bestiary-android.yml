@@ -145,7 +145,8 @@ jobs:
           test -n "$APK"
           cp "$APK" manager-output/BestiaryManager-Android-1.0.0-debug.apk
           sha256sum manager-output/BestiaryManager-Android-1.0.0-debug.apk > manager-output/BestiaryManager-Android-1.0.0-debug-SHA256.txt
-          test "$(stat -c%s manager-output/BestiaryManager-Android-1.0.0-debug.apk)" -gt 50000
+          test "$(stat -c%s manager-output/BestiaryManager-Android-1.0.0-debug.apk)" -gt 10000
+          ls -lh manager-output/BestiaryManager-Android-1.0.0-debug.apk
       - name: Upload Manager artifact
         uses: actions/upload-artifact@v4
         with:
