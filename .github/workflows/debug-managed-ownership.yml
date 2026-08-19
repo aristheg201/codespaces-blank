@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Scan recoverable original 5.1.0 overlay
+      - name: Print recoverable 5.1.0 core files
         shell: bash
         run: |
           set -euo pipefail
@@ -23,31 +23,23 @@ jobs:
           import base64, pathlib, zlib
           root=pathlib.Path('bestiary-v510/overlay')
           names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
-          text=''.join((root/n).read_text().strip() for n in names)
-          text += '='*((4-len(text)%4)%4)
-          packed=base64.b64decode(text)
-          d=zlib.decompressobj(16+zlib.MAX_WBITS)
-          raw=d.decompress(packed)
-          print('packed',len(packed),'raw',len(raw),'eof',d.eof,'head',repr(raw[:128]))
-          found=[]; start=0
+          text=''.join((root/n).read_text().strip() for n in names); text += '='*((4-len(text)%4)%4)
+          d=zlib.decompressobj(16+zlib.MAX_WBITS); raw=d.decompress(base64.b64decode(text))
+          targets={'src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/RemoteService.ts','src/renderer/src/components/LibraryModal.tsx','src/shared/ipc.ts'}
+          start=0
           while True:
               p=raw.find(b'ustar',start)
               if p<0: break
-              h0=p-257
-              if h0>=0 and h0+512<=len(raw):
-                  h=raw[h0:h0+512]
-                  name=h[:100].split(b'\0',1)[0].decode('utf-8','replace')
-                  prefix=h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
-                  if prefix: name=prefix+'/'+name
-                  try: size=int(h[124:136].split(b'\0',1)[0].strip() or b'0',8)
-                  except: size=-1
-                  found.append((h0,name,size))
-              start=p+5
-          print('HEADERS',len(found))
-          for h0,name,size in found:
-              print('HDR',h0,name,size)
+              h0=p-257; start=p+5
+              if h0<0 or h0+512>len(raw): continue
+              h=raw[h0:h0+512]
+              name=h[:100].split(b'\0',1)[0].decode('utf-8','replace')
+              prefix=h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
+              if prefix: name=prefix+'/'+name
+              try: size=int(h[124:136].split(b'\0',1)[0].strip() or b'0',8)
+              except: continue
               data0=h0+512
-              if size>=0 and data0+size<=len(raw) and any(k in name for k in ['ipc.ts','index.ts','SyncEngine.ts','SettingsStore.ts','SettingsModal.tsx','Home.tsx','App.tsx','launcherStore.ts']):
+              if name in targets and data0+size<=len(raw):
                   print('===',name,'===')
-                  print(raw[data0:data0+size].decode('utf-8','replace')[:50000])
+                  print(raw[data0:data0+size].decode('utf-8','replace'))
           PY
