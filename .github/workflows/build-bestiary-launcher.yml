@@ -137,12 +137,12 @@ jobs:
       - name: Verify restored renderer contract
         shell: pwsh
         run: |
-          $home = Get-Content "$PWD/source/src/renderer/src/components/Home.tsx" -Raw
-          $css = Get-Content "$PWD/source/src/renderer/src/components/Home.css" -Raw
-          if ($home -notmatch 'bestiary-layout') { throw 'Restored launcher layout is missing.' }
-          if ($home -notmatch 'bestiary-rail') { throw 'Announcement/system side rail is missing.' }
-          if ($css -notmatch '\.bestiary-layout') { throw 'Restored launcher CSS is missing.' }
-          if ($css.Length -lt 5000) { throw 'Restored launcher CSS is unexpectedly small.' }
+          $homeSource = Get-Content "$PWD/source/src/renderer/src/components/Home.tsx" -Raw
+          $cssSource = Get-Content "$PWD/source/src/renderer/src/components/Home.css" -Raw
+          if ($homeSource -notmatch 'bestiary-layout') { throw 'Restored launcher layout is missing.' }
+          if ($homeSource -notmatch 'bestiary-rail') { throw 'Announcement/system side rail is missing.' }
+          if ($cssSource -notmatch '\.bestiary-layout') { throw 'Restored launcher CSS is missing.' }
+          if ($cssSource.Length -lt 5000) { throw 'Restored launcher CSS is unexpectedly small.' }
           Write-Host 'Restored Bestiary desktop renderer verified.'
 
       - name: Generate Windows icon
