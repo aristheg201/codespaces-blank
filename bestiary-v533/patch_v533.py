@@ -15,6 +15,7 @@ replacements = {
     '<div className="login-icon">◌</div><div className="login-tag">OFFLINE / CRACK</div>': '<div className="login-icon">◌</div><div className="login-tag">LOCAL / OFFLINE</div>',
     '<p>Dùng UUID offline ổn định. Phù hợp tài khoản crack và hệ EasyAuth hiện tại của server.</p>': '<p>Dùng danh tính local riêng của server với UUID offline ổn định. Chế độ này tách biệt khỏi Microsoft và Java Edition Game Service APIs, không giả lập entitlement hoặc profile chính chủ.</p>',
     "{state.mode === 'offline' ? 'ĐANG SỬ DỤNG' : 'DÙNG TÀI KHOẢN OFFLINE'}": "{state.mode === 'offline' ? 'ĐANG SỬ DỤNG' : 'DÙNG PROFILE LOCAL'}",
+    "'Skin crack được lưu local và Bestiary Skin Bridge áp dụng khi bạn vào server.'": "'Skin local/offline được lưu local và Bestiary Skin Bridge áp dụng khi bạn vào server.'",
 }
 for old, new in replacements.items():
     req(old in s, f'AccountScreen wording marker missing: {old[:48]}')
