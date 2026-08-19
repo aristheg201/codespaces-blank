@@ -1,4 +1,4 @@
-name: Build Bestiary Pack Manager 6.1.0 Windows
+name: Build Bestiary Pack Manager 6.2.0 Windows
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Reconstruct Manager 6.1.0 source
+      - name: Reconstruct Manager 6.2.0 source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -59,9 +59,10 @@ jobs:
           node manager-v606/patch-main.cjs
           node manager-v610/patch-main.cjs
           node manager-v610/patch-ui.cjs
+          node manager-v620/patch-v620.cjs
 
           $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
-          $pkg.version = '6.1.0'
+          $pkg.version = '6.2.0'
           $pkg.author = 'SVFrame Team Studio'
           $pkg | ConvertTo-Json -Depth 20 | Set-Content manager/package.json -Encoding UTF8
 
@@ -90,7 +91,7 @@ jobs:
             } finally { $bitmap.Dispose() }
           } finally { $source.Dispose() }
 
-      - name: Verify ZIP import, profiles, updater, and runtime contracts
+      - name: Verify ZIP profiles, updater, Microsoft config, and runtime contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -98,6 +99,7 @@ jobs:
           $types = Get-Content manager/src/shared/types.ts -Raw
           $workspace = Get-Content manager/src/main/services/WorkspaceService.ts -Raw
           $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          $settings = Get-Content manager/src/main/services/SettingsService.ts -Raw
           $main = Get-Content manager/src/main/index.ts -Raw
           $updater = Get-Content manager/src/main/services/AppUpdater.ts -Raw
           if ($app -notmatch 'mods-full\.zip' -or $app -notmatch 'mods-pc-lite\.zip' -or $app -notmatch 'mods-android\.zip') { throw 'Three-package import UX is missing.' }
@@ -108,8 +110,10 @@ jobs:
           if ($service -notmatch "profile === 'android'" -or $service -notmatch "includes\('android'\)") { throw 'Android manifest profile publishing is missing.' }
           if ($service -notmatch 'profiles: manifestProfiles\.get') { throw 'Per-file profile publishing was lost.' }
           if ($service -notmatch 'loaderVersion: this\.settings\.fabricLoaderVersion') { throw 'Pinned Fabric runtime contract was lost.' }
+          if ($types -notmatch 'microsoftClientId' -or $settings -notmatch 'microsoftClientId' -or $service -notmatch 'microsoftClientId: this\.settings\.microsoftClientId\.trim' -or $app -notmatch 'MICROSOFT CLIENT ID') { throw 'Microsoft public-client distribution configuration is incomplete.' }
+          if ($app -match 'client secret' -and $app -notmatch 'Không nhập client secret') { throw 'Manager UI must never request a Microsoft client secret.' }
           if ($types -notmatch 'AppUpdateState' -or $main -notmatch 'app-update:check' -or $updater -notmatch 'sha256' -or $app -notmatch 'CẬP NHẬT & KHỞI ĐỘNG LẠI') { throw 'Manager auto updater contract is incomplete.' }
-          Write-Host 'Manager 6.1.0 ZIP/profile/updater/runtime contracts verified.'
+          Write-Host 'Manager 6.2.0 ZIP/profile/updater/Microsoft/runtime contracts verified.'
 
       - name: Install dependencies
         working-directory: manager
@@ -128,7 +132,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.1.0.exe -ErrorAction Stop
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.2.0.exe -ErrorAction Stop
           $unpacked = Resolve-Path manager/release/win-unpacked
           $exe = Get-Item (Join-Path $unpacked 'Bestiary Pack Manager.exe') -ErrorAction Stop
           if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
@@ -146,17 +150,17 @@ jobs:
           Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
           Get-Process | Where-Object { $_.ProcessName -like 'Bestiary*' } | Stop-Process -Force -ErrorAction SilentlyContinue
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt -Encoding ascii
+          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt -Encoding ascii
           Copy-Item $stdout manager/release/manager-smoke-stdout.log -Force -ErrorAction SilentlyContinue
           Copy-Item $stderr manager/release/manager-smoke-stderr.log -Force -ErrorAction SilentlyContinue
           Write-Host "Manager SHA256: $hash"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.1.0
+          name: BestiaryPackManager-Windows-6.2.0
           path: |
-            manager/release/BestiaryPackManager-Setup-6.1.0.exe
-            manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.2.0.exe
+            manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt
             manager/release/manager-smoke-stdout.log
             manager/release/manager-smoke-stderr.log
           if-no-files-found: error
@@ -164,13 +168,14 @@ jobs:
 
       - name: Publish durable Manager release assets
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'manager-v6.1.0'
+          $tag = 'manager-v6.2.0'
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.1.0' --notes 'Bestiary Pack Manager 6.1.0: ZIP profile workflow retained and SHA-256 verified application updater added.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.2.0' --notes 'Adds Microsoft Entra public client ID publishing for Bestiary Launcher premium authentication.'
           }
-          gh release upload $tag manager/release/BestiaryPackManager-Setup-6.1.0.exe manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt --clobber
+          gh release upload $tag manager/release/BestiaryPackManager-Setup-6.2.0.exe manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt --clobber
