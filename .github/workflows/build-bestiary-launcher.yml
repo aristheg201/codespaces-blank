@@ -2,11 +2,9 @@ name: Build Bestiary Launcher 5.1.0
 
 on:
   push:
-    branches:
-      - bestiary-launcher-v5-1-0
+    branches: [bestiary-launcher-v5-1-0]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,16 +16,13 @@ jobs:
     timeout-minutes: 45
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -37,70 +32,44 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force source | Out-Null
-
-          $sourcePartNames = @(
-            "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
-          )
-          $sourceB64 = ($sourcePartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
-          [IO.File]::WriteAllBytes("$PWD/base-source.tar.gz", [Convert]::FromBase64String($sourceB64))
-          tar -xzf "$PWD/base-source.tar.gz" -C "$PWD/source"
-          if ($LASTEXITCODE -ne 0) { throw "Unable to extract base launcher source archive" }
-          if (-not (Test-Path "$PWD/source/package.json")) { throw "Base launcher source reconstruction failed" }
-
-          Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
-          Copy-Item "bestiary-build/electron-builder.json" "$PWD/source/electron-builder.json" -Force
-          Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
-
-          $overlayPartNames = @("part-00.txt", "part-01.txt", "part-02.txt", "part-03.txt", "part-04.txt")
-          $overlayB64 = ($overlayPartNames | ForEach-Object { (Get-Content "bestiary-v510/overlay/$_" -Raw).Trim() }) -join ""
-          $env:OVERLAY_B64 = $overlayB64
           @'
-          import base64, gzip, io, os, pathlib, tarfile, zipfile
-          encoded = os.environ['OVERLAY_B64']
-          packed = base64.b64decode(encoded, validate=True)
-          print('overlay packed bytes:', len(packed), 'magic:', packed[:8].hex())
-          raw = gzip.decompress(packed) if packed[:2] == b'\x1f\x8b' else packed
-          print('overlay unpacked bytes:', len(raw), 'head:', repr(raw[:160]))
-          target = pathlib.Path('source')
-          bio = io.BytesIO(raw)
-          try:
-              with tarfile.open(fileobj=bio, mode='r:*') as tf:
-                  print('overlay format: tar; members:', len(tf.getmembers()))
-                  tf.extractall(target)
-                  raise SystemExit(0)
-          except tarfile.ReadError:
-              pass
-          bio.seek(0)
-          if zipfile.is_zipfile(bio):
-              with zipfile.ZipFile(bio) as zf:
-                  print('overlay format: zip; members:', len(zf.infolist()))
-                  zf.extractall(target)
-                  raise SystemExit(0)
-          try:
-              text = raw.decode('utf-8')
-          except UnicodeDecodeError as exc:
-              raise SystemExit(f'Unknown overlay binary format: {exc}')
-          pathlib.Path('v510-overlay.txt').write_text(text, encoding='utf-8')
-          print('overlay format: utf-8 text; first 500 chars:')
-          print(text[:500])
-          if text.lstrip().startswith('diff --git'):
-              raise SystemExit(20)
-          raise SystemExit('Unknown text overlay format')
-          '@ | Set-Content -Encoding UTF8 unpack_overlay.py
-          python unpack_overlay.py
-          if ($LASTEXITCODE -eq 20) {
-            git apply --directory=source --whitespace=nowarn v510-overlay.txt
-            if ($LASTEXITCODE -ne 0) { throw "Unable to apply git patch overlay" }
-          } elseif ($LASTEXITCODE -ne 0) {
-            throw "Unable to unpack Bestiary Launcher 5.1.0 overlay"
-          }
+          import base64, pathlib, tarfile, io
+
+          root = pathlib.Path('bestiary-v510-final/source')
+          candidates = [
+              ['part-00.txt','part-01a1-0.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
+              ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
+          ]
+          out = pathlib.Path('source')
+          out.mkdir(exist_ok=True)
+          errors = []
+          for i, names in enumerate(candidates, 1):
+              try:
+                  text = ''.join((root / n).read_text(encoding='utf-8').strip() for n in names)
+                  packed = base64.b64decode(text, validate=True)
+                  with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as tf:
+                      members = tf.getmembers()
+                      if not any(m.name.endswith('package.json') for m in members):
+                          raise RuntimeError('package.json not found in archive')
+                      print(f'using source candidate {i}: {names}; members={len(members)}')
+                      tf.extractall(out)
+                  break
+              except Exception as exc:
+                  errors.append(f'candidate {i}: {exc!r}')
+                  for child in out.iterdir():
+                      if child.is_dir():
+                          import shutil; shutil.rmtree(child)
+                      else:
+                          child.unlink()
+          else:
+              raise SystemExit('No valid 5.1.0 source candidate. ' + ' | '.join(errors))
+          '@ | Set-Content -Encoding UTF8 reconstruct.py
+          python reconstruct.py
+          if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct Bestiary Launcher 5.1.0 source" }
+          if (-not (Test-Path "$PWD/source/package.json")) { throw "Launcher source reconstruction did not produce package.json" }
 
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
-
-          $logoPartNames = @(
-            "logo5-00a", "logo5-00b", "logo5-01a", "logo5-01b", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
-          )
+          $logoPartNames = @("logo5-00a","logo5-00b","logo5-01a","logo5-01b","logo5-02","logo5-03","logo5-04a","logo5-04b")
           $logoB64 = ($logoPartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           New-Item -ItemType Directory -Force "$PWD/source/resources" | Out-Null
           New-Item -ItemType Directory -Force "$PWD/source/src/renderer/public" | Out-Null
@@ -120,30 +89,25 @@ jobs:
           @'
           from PIL import Image
           from pathlib import Path
-          root = Path("source")
-          src = Image.open(root / "resources" / "logo.png").convert("RGBA")
-          canvas = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-          src.thumbnail((230, 150), Image.Resampling.LANCZOS)
-          canvas.alpha_composite(src, ((256-src.width)//2, (256-src.height)//2))
-          (root / "build").mkdir(parents=True, exist_ok=True)
-          canvas.save(root / "resources" / "icon.png")
-          canvas.save(root / "build" / "icon.ico", format="ICO", sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)])
+          root = Path('source')
+          src = Image.open(root/'resources'/'logo.png').convert('RGBA')
+          canvas = Image.new('RGBA',(256,256),(0,0,0,0))
+          src.thumbnail((230,150),Image.Resampling.LANCZOS)
+          canvas.alpha_composite(src,((256-src.width)//2,(256-src.height)//2))
+          (root/'build').mkdir(parents=True,exist_ok=True)
+          canvas.save(root/'resources'/'icon.png')
+          canvas.save(root/'build'/'icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)])
           '@ | Set-Content -Encoding UTF8 create_icon.py
           python create_icon.py
 
       - name: Install dependencies
         working-directory: source
-        shell: pwsh
         run: npm install --no-audit --no-fund
-
       - name: Typecheck
         working-directory: source
-        shell: pwsh
         run: npm run typecheck
-
       - name: Build NSIS installer
         working-directory: source
-        shell: pwsh
         run: npm run dist:win
 
       - name: Verify installer
@@ -152,7 +116,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.1.0.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer not produced" }
-          if ($installer.Length -lt 1000000) { throw "Installer is unexpectedly small: $($installer.Length)" }
+          if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
           Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -Force
@@ -162,20 +126,24 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $installer = "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe"
-          $proc = Start-Process -FilePath $installer -ArgumentList "/S" -PassThru -Wait
+          $proc = Start-Process -FilePath "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -ArgumentList "/S" -PassThru -Wait
           if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
           Start-Sleep -Seconds 2
           $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Launcher.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $installed) { throw "Installed Bestiary Launcher executable was not found under LOCALAPPDATA Programs" }
-          if ($installed.Length -lt 1000000) { throw "Installed launcher executable is unexpectedly small" }
+          if (-not $installed) { throw "Installed Bestiary Launcher executable not found" }
+          if ($installed.Length -lt 1000000) { throw "Installed launcher executable unexpectedly small" }
+          Copy-Item $installed.FullName "$PWD/build-output/Bestiary Launcher.exe" -Force
+          $installedHash = (Get-FileHash $installed.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$installedHash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
 
-      - name: Upload verified installer artifact
+      - name: Upload verified launcher artifacts
         uses: actions/upload-artifact@v4
         with:
           name: BestiaryLauncher-Windows-5.1.0
           path: |
             build-output/BestiaryLauncher-Setup-5.1.0.exe
             build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt
+            build-output/Bestiary Launcher.exe
+            build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt
           if-no-files-found: error
           retention-days: 7
