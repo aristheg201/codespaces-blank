@@ -5,16 +5,17 @@ Set-Location $repoRoot
 $source = Get-Content './bestiary-v521/build.ps1' -Raw
 $source = $source.Replace('5.2.1', '5.3.0').Replace('build-output-v521', 'build-output-v530')
 
-$patch521 = "python 'bestiary-v521/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }"
-if (-not $source.Contains($patch521)) { throw '5.2.1 patch composition marker missing.' }
-$patch530 = $patch521 + "`n" +
+$patchCommand = "python 'bestiary-v521/patch_home.py'"
+if (-not $source.Contains($patchCommand)) { throw '5.2.1 patch command marker missing.' }
+$patch530 = $patchCommand + "`n" +
+  "if (`$LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }`n" +
   "python 'bestiary-v530/patch_v530.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply Microsoft auth + skin patch.' }`n" +
   "`$bridge = Get-Item 'bestiary-skin-bridge/build/libs/bestiary-skin-bridge-1.0.0.jar' -ErrorAction Stop`n" +
   "Copy-Item `$bridge.FullName `"`$PWD/source/resources/bestiary-skin-bridge-1.0.0.jar`" -Force`n" +
   "`$builder = Get-Content `"`$PWD/source/electron-builder.json`" -Raw | ConvertFrom-Json`n" +
   "`$builder | Add-Member -NotePropertyName extraResources -NotePropertyValue @(@{ from = 'resources/bestiary-skin-bridge-1.0.0.jar'; to = 'bestiary-skin-bridge-1.0.0.jar' }) -Force`n" +
   "`$builder | ConvertTo-Json -Depth 20 | Set-Content `"`$PWD/source/electron-builder.json`" -Encoding UTF8"
-$source = $source.Replace($patch521, $patch530)
+$source = $source.Replace($patchCommand, $patch530)
 
 $generated = Join-Path $PSScriptRoot 'generated-build.ps1'
 Set-Content $generated $source -Encoding UTF8
