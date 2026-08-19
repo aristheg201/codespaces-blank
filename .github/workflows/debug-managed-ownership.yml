@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [bestiary-launcher-v5-1-0]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
