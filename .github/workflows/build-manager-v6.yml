@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 55
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -166,6 +165,8 @@ jobs:
       - name: Publish durable Manager release assets
         if: github.event_name == 'push'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'manager-v6.1.0'
           gh release view $tag *> $null
