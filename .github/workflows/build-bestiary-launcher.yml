@@ -1,4 +1,4 @@
-name: Build Bestiary Launcher 5.1.4
+name: Build Bestiary Launcher 5.1.5
 
 on:
   push:
@@ -30,20 +30,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build, verify UX, and runtime-smoke-test Launcher 5.1.4
+      - name: Build, verify library UX, and runtime-smoke-test Launcher 5.1.5
         shell: pwsh
-        run: ./bestiary-v514/build.ps1
+        run: ./bestiary-v515/build.ps1
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.1.4
+          name: BestiaryLauncher-Windows-5.1.5
           path: |
-            build-output-v514/BestiaryLauncher-Setup-5.1.4.exe
-            build-output-v514/BestiaryLauncher-Setup-5.1.4-SHA256.txt
-            build-output-v514/BestiaryLauncher-Portable-5.1.4.zip
-            build-output-v514/BestiaryLauncher-Portable-5.1.4-SHA256.txt
-            build-output-v514/runtime-smoke-stdout.log
-            build-output-v514/runtime-smoke-stderr.log
+            build-output-v515/BestiaryLauncher-Setup-5.1.5.exe
+            build-output-v515/BestiaryLauncher-Setup-5.1.5-SHA256.txt
+            build-output-v515/BestiaryLauncher-Portable-5.1.5.zip
+            build-output-v515/BestiaryLauncher-Portable-5.1.5-SHA256.txt
+            build-output-v515/runtime-smoke-stdout.log
+            build-output-v515/runtime-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
