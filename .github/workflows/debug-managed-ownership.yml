@@ -15,51 +15,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover readable original 5.1.0 overlay
+      - name: Scan recoverable original 5.1.0 overlay
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import base64, pathlib, zlib, io, tarfile
+          import base64, pathlib, zlib
           root=pathlib.Path('bestiary-v510/overlay')
           names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
           text=''.join((root/n).read_text().strip() for n in names)
           text += '='*((4-len(text)%4)%4)
           packed=base64.b64decode(text)
-          print('packed',len(packed),packed[:8].hex())
           d=zlib.decompressobj(16+zlib.MAX_WBITS)
-          raw=b''
-          try:
-              raw=d.decompress(packed)+d.flush()
-          except zlib.error as exc:
-              print('zlib error',repr(exc)); raw=d.unconsumed_tail
-          print('decompressed',len(raw),'eof',d.eof)
-          pathlib.Path('partial.tar').write_bytes(raw)
-          try:
-              tf=tarfile.open('partial.tar','r:')
-              print('MEMBERS')
-              members=[]
-              for m in tf:
-                  print(m.name,m.size)
-                  members.append(m)
-              for target in ['./src/shared/ipc.ts','./src/main/index.ts','./src/preload/index.ts','./src/main/core/SyncEngine.ts','./src/main/core/SettingsStore.ts','./src/renderer/src/components/SettingsModal.tsx','./src/renderer/src/components/Home.tsx','./src/renderer/src/App.tsx']:
-                  try:
-                      f=tf.extractfile(target)
-                      if f:
-                          print('===',target,'===')
-                          print(f.read().decode('utf-8','replace')[:30000])
-                  except Exception as exc:
-                      print('cannot read',target,repr(exc))
-          except Exception as exc:
-              print('tar open error',repr(exc))
-              # Parse complete 512-byte tar headers manually and print names.
-              pos=0
-              while pos+512<=len(raw):
-                  h=raw[pos:pos+512]
-                  if not any(h): break
+          raw=d.decompress(packed)
+          print('packed',len(packed),'raw',len(raw),'eof',d.eof,'head',repr(raw[:128]))
+          found=[]; start=0
+          while True:
+              p=raw.find(b'ustar',start)
+              if p<0: break
+              h0=p-257
+              if h0>=0 and h0+512<=len(raw):
+                  h=raw[h0:h0+512]
                   name=h[:100].split(b'\0',1)[0].decode('utf-8','replace')
+                  prefix=h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
+                  if prefix: name=prefix+'/'+name
                   try: size=int(h[124:136].split(b'\0',1)[0].strip() or b'0',8)
-                  except: break
-                  print('MANUAL',name,size)
-                  pos += 512 + ((size+511)//512)*512
+                  except: size=-1
+                  found.append((h0,name,size))
+              start=p+5
+          print('HEADERS',len(found))
+          for h0,name,size in found:
+              print('HDR',h0,name,size)
+              data0=h0+512
+              if size>=0 and data0+size<=len(raw) and any(k in name for k in ['ipc.ts','index.ts','SyncEngine.ts','SettingsStore.ts','SettingsModal.tsx','Home.tsx','App.tsx','launcherStore.ts']):
+                  print('===',name,'===')
+                  print(raw[data0:data0+size].decode('utf-8','replace')[:50000])
           PY
