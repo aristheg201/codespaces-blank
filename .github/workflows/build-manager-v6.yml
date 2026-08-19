@@ -1,4 +1,4 @@
-name: Build Bestiary Pack Manager 6.0.6 Windows
+name: Build Bestiary Pack Manager 6.1.0 Windows
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 55
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,7 +26,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Reconstruct Manager 6.0.6 source
+      - name: Reconstruct Manager 6.1.0 source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -48,14 +49,22 @@ jobs:
           node patch-v603.cjs
           node patch-v604.cjs
 
-          Copy-Item manager-v606/types.ts manager/src/shared/types.ts -Force
-          Copy-Item manager-v606/preload-index.ts manager/src/preload/index.ts -Force
           Copy-Item manager-v606/store.ts manager/src/renderer/src/store.ts -Force
           Copy-Item manager-v606/App.tsx manager/src/renderer/src/App.tsx -Force
           Copy-Item manager-v606/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v610/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v610/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v610/AppUpdater.ts manager/src/main/services/AppUpdater.ts -Force
           node patch-v605.cjs
           node patch-v606.cjs
           node manager-v606/patch-main.cjs
+          node manager-v610/patch-main.cjs
+          node manager-v610/patch-ui.cjs
+
+          $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
+          $pkg.version = '6.1.0'
+          $pkg.author = 'SVFrame Team Studio'
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content manager/package.json -Encoding UTF8
 
           New-Item -ItemType Directory -Force manager/src/renderer/public | Out-Null
           Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
@@ -82,7 +91,7 @@ jobs:
             } finally { $bitmap.Dispose() }
           } finally { $source.Dispose() }
 
-      - name: Verify ZIP import, status, profile, and runtime contracts
+      - name: Verify ZIP import, profiles, updater, and runtime contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -91,6 +100,7 @@ jobs:
           $workspace = Get-Content manager/src/main/services/WorkspaceService.ts -Raw
           $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
           $main = Get-Content manager/src/main/index.ts -Raw
+          $updater = Get-Content manager/src/main/services/AppUpdater.ts -Raw
           if ($app -notmatch 'mods-full\.zip' -or $app -notmatch 'mods-pc-lite\.zip' -or $app -notmatch 'mods-android\.zip') { throw 'Three-package import UX is missing.' }
           if ($app -notmatch 'UP-TO-DATE' -or $app -notmatch 'UPDATE' -or $app -notmatch 'CHANGED') { throw 'Import status UX is missing.' }
           if ($types -notmatch "'android'" -or $types -notmatch 'importModPackages') { throw 'Android/package API types are missing.' }
@@ -99,7 +109,8 @@ jobs:
           if ($service -notmatch "profile === 'android'" -or $service -notmatch "includes\('android'\)") { throw 'Android manifest profile publishing is missing.' }
           if ($service -notmatch 'profiles: manifestProfiles\.get') { throw 'Per-file profile publishing was lost.' }
           if ($service -notmatch 'loaderVersion: this\.settings\.fabricLoaderVersion') { throw 'Pinned Fabric runtime contract was lost.' }
-          Write-Host 'Manager 6.0.6 ZIP/status/profile/runtime contracts verified.'
+          if ($types -notmatch 'AppUpdateState' -or $main -notmatch 'app-update:check' -or $updater -notmatch 'sha256' -or $app -notmatch 'CẬP NHẬT & KHỞI ĐỘNG LẠI') { throw 'Manager auto updater contract is incomplete.' }
+          Write-Host 'Manager 6.1.0 ZIP/profile/updater/runtime contracts verified.'
 
       - name: Install dependencies
         working-directory: manager
@@ -118,7 +129,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.0.6.exe -ErrorAction Stop
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.1.0.exe -ErrorAction Stop
           $unpacked = Resolve-Path manager/release/win-unpacked
           $exe = Get-Item (Join-Path $unpacked 'Bestiary Pack Manager.exe') -ErrorAction Stop
           if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
@@ -136,18 +147,29 @@ jobs:
           Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
           Get-Process | Where-Object { $_.ProcessName -like 'Bestiary*' } | Stop-Process -Force -ErrorAction SilentlyContinue
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.0.6-SHA256.txt -Encoding ascii
+          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt -Encoding ascii
           Copy-Item $stdout manager/release/manager-smoke-stdout.log -Force -ErrorAction SilentlyContinue
           Copy-Item $stderr manager/release/manager-smoke-stderr.log -Force -ErrorAction SilentlyContinue
           Write-Host "Manager SHA256: $hash"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.0.6
+          name: BestiaryPackManager-Windows-6.1.0
           path: |
-            manager/release/BestiaryPackManager-Setup-6.0.6.exe
-            manager/release/BestiaryPackManager-Setup-6.0.6-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.1.0.exe
+            manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt
             manager/release/manager-smoke-stdout.log
             manager/release/manager-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish durable Manager release assets
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $tag = 'manager-v6.1.0'
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.1.0' --notes 'Bestiary Pack Manager 6.1.0: ZIP profile workflow retained and SHA-256 verified application updater added.'
+          }
+          gh release upload $tag manager/release/BestiaryPackManager-Setup-6.1.0.exe manager/release/BestiaryPackManager-Setup-6.1.0-SHA256.txt --clobber
