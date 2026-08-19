@@ -8,10 +8,10 @@ s=s.replace(/import type \{([^}]+)\} from '\.\.\/\.\.\/shared\/types';/, (m,insi
 });
 s=s.replace('Release Console v6','Release Console 6.1.0').replace('Release Console 6.0.6','Release Console 6.1.0');
 
-const appRe=/export default function App\(\) \{\n  const \{ load, snapshot, view, error, clearError, setProgress \} = useManager\(\);\n  useEffect\(\(\) => \{ const off = window\.bestiary\.onProgress\(setProgress\); void load\(\); return off; \}, \[load, setProgress\]\);/;
-if(!appRe.test(s)) throw new Error('Manager default App function marker missing');
+const appRe=/function App\(\) \{\n  const \{ load, snapshot, view, error, clearError, setProgress \} = useManager\(\);\n  useEffect\(\(\) => \{ const off = window\.bestiary\.onProgress\(setProgress\); void load\(\); return off; \}, \[load, setProgress\]\);/;
+if(!appRe.test(s)) throw new Error('Manager App function marker missing after v606 export patch');
 const replacement=[
-"export default function App() {",
+"function App() {",
 "  const { load, snapshot, view, error, clearError, setProgress } = useManager();",
 "  const [appUpdate,setAppUpdate]=useState<AppUpdateState>({currentVersion:'6.1.0',latestVersion:null,status:'idle',progress:0,message:'Chưa kiểm tra cập nhật.'});",
 "  useEffect(() => {",
@@ -41,13 +41,14 @@ const insert=[
 "}",
 ""
 ].join('\n');
-const exportPos=s.indexOf('export default function App()');
-if(exportPos<0) throw new Error('Manager default export position missing');
-s=s.slice(0,exportPos)+insert+s.slice(exportPos);
+const appPos=s.indexOf('function App()');
+if(appPos<0) throw new Error('Manager App position missing');
+s=s.slice(0,appPos)+insert+s.slice(appPos);
 
 const progressMarker='    <ProgressOverlay />';
 if(!s.includes(progressMarker)) throw new Error('ProgressOverlay render marker missing');
 s=s.replace(progressMarker,'    <ProgressOverlay />\n    <ManagerUpdate state={appUpdate} />');
+if(!s.includes('export default App;')) throw new Error('Manager default export lost');
 
 fs.writeFileSync(p,s);
-console.log('Manager 6.1.0 updater UI patched against default App source.');
+console.log('Manager 6.1.0 updater UI patched after v606 export transform.');
