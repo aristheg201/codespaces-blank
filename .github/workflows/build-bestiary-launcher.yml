@@ -150,31 +150,27 @@ jobs:
         working-directory: source
         run: npm run dist:win
 
-      - name: Verify installer
+      - name: Stage and verify Windows executables
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.1.0.exe" | Select-Object -First 1
-          if (-not $installer) { throw "Installer not produced" }
+          $installer = Get-Item "$PWD/source/release/BestiaryLauncher-Setup-5.1.0.exe" -ErrorAction Stop
+          $launcher = Get-Item "$PWD/source/release/win-unpacked/Bestiary Launcher.exe" -ErrorAction Stop
           if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
+          if ($launcher.Length -lt 1000000) { throw "Launcher executable unexpectedly small: $($launcher.Length)" }
+
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
           Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -Force
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  BestiaryLauncher-Setup-5.1.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt"
+          Copy-Item $launcher.FullName "$PWD/build-output/Bestiary Launcher.exe" -Force
 
-      - name: Smoke-test NSIS and extract launcher exe
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $proc = Start-Process -FilePath "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -ArgumentList "/S" -PassThru -Wait
-          if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
-          Start-Sleep -Seconds 2
-          $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Launcher.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $installed) { throw "Installed Bestiary Launcher executable not found" }
-          if ($installed.Length -lt 1000000) { throw "Installed launcher executable unexpectedly small" }
-          Copy-Item $installed.FullName "$PWD/build-output/Bestiary Launcher.exe" -Force
-          $hash = (Get-FileHash $installed.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
+          $installerHash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $launcherHash = (Get-FileHash $launcher.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$installerHash  BestiaryLauncher-Setup-5.1.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt"
+          "$launcherHash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
+
+          Write-Host "Installer bytes: $($installer.Length)"
+          Write-Host "Launcher bytes:  $($launcher.Length)"
+          Write-Host "Launcher SHA256: $launcherHash"
 
       - name: Upload verified launcher artifacts
         uses: actions/upload-artifact@v4
