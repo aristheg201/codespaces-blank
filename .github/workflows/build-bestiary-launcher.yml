@@ -34,7 +34,6 @@ jobs:
           $ErrorActionPreference = "Stop"
           @'
           import base64, pathlib, tarfile, io, shutil
-
           root = pathlib.Path('bestiary-v510-final/source')
           candidates = [
               ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
@@ -66,6 +65,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct Bestiary Launcher 5.1.0 source" }
           if (-not (Test-Path "$PWD/source/package.json")) { throw "Launcher source reconstruction did not produce package.json" }
 
+          Copy-Item "bestiary-v510-final/fixes/ManagedOwnership.ts" "$PWD/source/src/main/core/ManagedOwnership.ts" -Force
           New-Item -ItemType Directory -Force "$PWD/source/build" | Out-Null
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
           $logoPartNames = @("logo5-00a","logo5-00b","logo5-01a","logo5-01b","logo5-02","logo5-03","logo5-04a","logo5-04b")
