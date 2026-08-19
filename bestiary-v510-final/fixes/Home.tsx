@@ -1,4 +1,5 @@
 import type { LauncherSettings, LauncherSnapshot, UiProgressEvent } from '../../../shared/ipc';
+import { DiscordText } from './DiscordText';
 import './Home.css';
 
 interface Props {
@@ -18,7 +19,7 @@ const presetLabel = (value: string) => value ? value.toUpperCase() : 'BALANCED';
 
 export function Home({ snapshot, settings, progress, onUsername, onPlay, onDiscord, onSettings, onLibrary, onConsole, onAnnouncement }: Props) {
   const release = snapshot.release;
-  const preview = release.announcementBody.split(/\r?\n/u).filter(Boolean).slice(0, 4).join('\n');
+  const preview = release.announcementBody.split(/\r?\n/u).slice(0, 7).join('\n');
   const busy = snapshot.launching || (progress !== null && !['idle', 'running', 'error'].includes(progress.stage));
   const profile = settings.clientProfile ? settings.clientProfile.toUpperCase() : 'CHƯA CÀI';
   const remoteVersion = release.version || '---';
@@ -26,7 +27,7 @@ export function Home({ snapshot, settings, progress, onUsername, onPlay, onDisco
   return <main className="bestiary-home">
     <header className="bestiary-titlebar">
       <div className="bestiary-titlebrand"><span className="title-dot" />BESTIARY LAUNCHER</div>
-      <div className="bestiary-window-version">5.1.2</div>
+      <div className="bestiary-window-version">5.1.4</div>
     </header>
 
     <div className="bestiary-layout">
@@ -48,9 +49,9 @@ export function Home({ snapshot, settings, progress, onUsername, onPlay, onDisco
         <div className="bestiary-playcard">
           <label className="bestiary-userfield">
             <span>TÊN NGƯỜI CHƠI</span>
-            <input value={settings.username} maxLength={16} spellCheck={false} onChange={(event) => onUsername(event.target.value)} />
+            <input value={settings.username} maxLength={16} spellCheck={false} placeholder="Nhập username" onChange={(event) => onUsername(event.target.value.replace(/[^A-Za-z0-9_]/gu, ''))} />
           </label>
-          <button className="bestiary-play" disabled={busy} onClick={() => void onPlay()}>
+          <button className="bestiary-play" disabled={busy || settings.username.length < 3} onClick={() => void onPlay()}>
             <span className="play-triangle">▶</span>
             {busy ? 'ĐANG CHUẨN BỊ...' : snapshot.gameInstalled ? 'CHƠI NGAY' : 'CÀI CLIENT & CHƠI'}
           </button>
@@ -64,7 +65,7 @@ export function Home({ snapshot, settings, progress, onUsername, onPlay, onDisco
 
         <div className="bestiary-actions">
           <button onClick={() => void onDiscord()}><b>◉</b><span><strong>Discord</strong><small>Cộng đồng Bestiary</small></span></button>
-          <button onClick={onSettings}><b>⚙</b><span><strong>Cài đặt</strong><small>RAM · Runtime · Hiệu năng</small></span></button>
+          <button onClick={onSettings}><b>⚙</b><span><strong>Cài đặt</strong><small>Client · RAM · Hiển thị</small></span></button>
           <button onClick={onConsole}><b>▣</b><span><strong>Console</strong><small>Log game trực tiếp</small></span></button>
         </div>
 
@@ -76,9 +77,9 @@ export function Home({ snapshot, settings, progress, onUsername, onPlay, onDisco
           <header><span>SERVER ANNOUNCEMENT</span><i /></header>
           <div className="announcement-body">
             <h2>{release.announcementTitle || 'THÔNG BÁO MÁY CHỦ'}</h2>
-            <p>{preview || 'Chưa có thông báo mới.'}</p>
+            {preview ? <DiscordText text={preview} compact /> : <p>Chưa có thông báo mới.</p>}
           </div>
-          <button onClick={onAnnouncement}>XEM ĐẦY ĐỦ</button>
+          <button onClick={onAnnouncement}>XEM ĐẦY ĐỦ →</button>
           <footer><span>BESTIARY</span><span>{remoteVersion}</span></footer>
         </section>
 
@@ -87,7 +88,7 @@ export function Home({ snapshot, settings, progress, onUsername, onPlay, onDisco
           <dl>
             <div><dt>RAM</dt><dd>{(snapshot.systemRamMb / 1024).toFixed(1)} GB</dd></div>
             <div><dt>PRESET</dt><dd>{presetLabel(settings.performancePreset)}</dd></div>
-            <div><dt>DISPLAY</dt><dd>{settings.width}×{settings.height}</dd></div>
+            <div><dt>DISPLAY</dt><dd>{settings.fullscreen ? 'FULLSCREEN' : `${settings.width}×${settings.height}`}</dd></div>
           </dl>
         </section>
       </aside>
