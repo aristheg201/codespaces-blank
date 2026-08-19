@@ -1,0 +1,174 @@
+diff --git a/src/main/core/Launcher.ts b/src/main/core/Launcher.ts
+index 80f09ad..6359bc8 100644
+--- a/src/main/core/Launcher.ts
++++ b/src/main/core/Launcher.ts
+@@ -87,6 +87,7 @@ interface MclcLaunchOptions {
+   customArgs: string[];
+   customLaunchArgs: string[];
+   timeout: number;
++  overrides?: { maxSockets?: number; detached?: boolean };
+   quickPlay?: {
+     type: 'multiplayer';
+     identifier: string;
+@@ -94,7 +95,7 @@ interface MclcLaunchOptions {
+ }
+ 
+ interface MclcClient {
+-  launch(options: MclcLaunchOptions): Promise<ChildProcess>;
++  launch(options: MclcLaunchOptions): Promise<ChildProcess | null>;
+   on(event: string, listener: (...args: unknown[]) => void): this;
+   removeAllListeners(): this;
+ }
+@@ -220,7 +221,8 @@ export class MinecraftLauncher {
+         },
+         customArgs: this.buildJvmArguments(normalized),
+         customLaunchArgs: [...(normalized.extraGameArgs ?? [])],
+-        timeout: normalized.timeoutMs ?? 120_000,
++        timeout: normalized.timeoutMs ?? 60_000,
++        overrides: { maxSockets: 16, detached: true },
+         ...(normalized.serverHost
+           ? {
+               quickPlay: {
+@@ -233,6 +235,9 @@ export class MinecraftLauncher {
+ 
+       this.emit({ type: 'state', state: 'launching' });
+       const child = await client.launch(options);
++      if (!child) {
++        throw new Error('Minecraft Launcher Core không tạo được tiến trình game. Mở Console để xem log chi tiết.');
++      }
+       this.activeProcess = child;
+       this.bindProcessEvents(child, client);
+       this.emit({ type: 'state', state: 'running' });
+diff --git a/src/main/index.ts b/src/main/index.ts
+index a3097af..5148bab 100644
+--- a/src/main/index.ts
++++ b/src/main/index.ts
+@@ -38,6 +38,7 @@ let mainWindow: BrowserWindow | null = null;
+ let activeSync: SyncEngine | null = null;
+ let currentRemote: RemoteReleaseInfo | null = null;
+ let launchBusy = false;
++let minecraftBootstrapPercent = 90;
+ 
+ function fallbackRemote(): RemoteReleaseInfo {
+   return {
+@@ -102,6 +103,52 @@ function sendLog(event: GameLogEvent): void {
+   }
+ }
+ 
++function handleMinecraftBootstrapProgress(payload: unknown): void {
++  if (!payload || typeof payload !== 'object') return;
++  const data = payload as Record<string, unknown>;
++  const kind = typeof data.type === 'string' ? data.type : 'minecraft';
++  const normalized = kind.toLowerCase();
++
++  let start = 90;
++  let end = 99;
++  let title = 'Đang chuẩn bị Minecraft';
++  if (normalized.includes('native')) {
++    start = 90; end = 91; title = 'Đang chuẩn bị native libraries';
++  } else if (normalized.includes('class') || normalized.includes('librar')) {
++    start = 91; end = 96; title = 'Đang tải thư viện Minecraft';
++  } else if (normalized.includes('asset')) {
++    start = 96; end = 99; title = 'Đang tải assets Minecraft';
++  } else if (normalized.includes('version-jar')) {
++    start = 90; end = 91.5; title = 'Đang tải Minecraft';
++  }
++
++  const task = Number(data.task);
++  const totalTasks = Number(data.total);
++  const currentBytes = Number(data.current);
++  const totalBytes = Number(data.total);
++  let ratio = 0;
++  let detail = kind;
++
++  if (Number.isFinite(task) && Number.isFinite(totalTasks) && totalTasks > 0 && data.task !== undefined) {
++    ratio = Math.max(0, Math.min(1, task / totalTasks));
++    detail = `${Math.floor(task).toLocaleString()} / ${Math.floor(totalTasks).toLocaleString()} file`;
++  } else if (Number.isFinite(currentBytes) && Number.isFinite(totalBytes) && totalBytes > 0) {
++    ratio = Math.max(0, Math.min(1, currentBytes / totalBytes));
++    const name = typeof data.name === 'string' && data.name ? data.name : kind;
++    detail = `${name} · ${(currentBytes / 1024 / 1024).toFixed(1)} / ${(totalBytes / 1024 / 1024).toFixed(1)} MB`;
++  }
++
++  minecraftBootstrapPercent = Math.max(minecraftBootstrapPercent, start + (end - start) * ratio);
++  sendProgress({
++    stage: 'launching',
++    percent: minecraftBootstrapPercent,
++    title,
++    detail,
++    speedMBps: 0,
++    etaSeconds: null,
++  });
++}
++
+ function performanceArgs(settings: LauncherSettings): string[] {
+   switch (settings.performancePreset) {
+     case 'quality':
+@@ -206,11 +253,12 @@ async function startGame(input: LauncherSettings): Promise<LaunchResponse> {
+       remote.fabricLoader,
+     );
+ 
++    minecraftBootstrapPercent = 90;
+     sendProgress({
+       stage: 'launching',
+       percent: 90,
+-      title: 'Đang khởi động Minecraft',
+-      detail: 'Đang chuẩn bị thư viện, assets và tiến trình game...',
++      title: 'Đang chuẩn bị Minecraft',
++      detail: 'Kiểm tra client jar, libraries và assets...',
+       speedMBps: 0,
+       etaSeconds: null,
+     });
+@@ -227,7 +275,7 @@ async function startGame(input: LauncherSettings): Promise<LaunchResponse> {
+       serverHost: remote.serverHost || undefined,
+       serverPort: remote.serverHost ? remote.serverPort : undefined,
+       extraJvmArgs: performanceArgs(settings),
+-      timeoutMs: 180_000,
++      timeoutMs: 60_000,
+     });
+ 
+     sendProgress({
+@@ -316,7 +364,42 @@ function createWindow(): void {
+ minecraftLauncher.onEvent((event) => {
+   if (event.type === 'stdout') sendLog({ level: 'info', message: event.message });
+   if (event.type === 'stderr') sendLog({ level: 'error', message: event.message });
+-  if (event.type === 'debug') sendLog({ level: 'debug', message: event.message });
++  if (event.type === 'debug') {
++    sendLog({ level: 'debug', message: event.message });
++    if (event.message.includes('Attempting to download Minecraft version jar')) {
++      sendProgress({
++        stage: 'launching',
++        percent: Math.max(90, minecraftBootstrapPercent),
++        title: 'Đang tải Minecraft',
++        detail: 'Đang tải client jar...',
++        speedMBps: 0,
++        etaSeconds: null,
++      });
++    } else if (event.message.includes('Attempting to download assets')) {
++      minecraftBootstrapPercent = Math.max(minecraftBootstrapPercent, 96);
++      sendProgress({
++        stage: 'launching',
++        percent: minecraftBootstrapPercent,
++        title: 'Đang tải assets Minecraft',
++        detail: 'Đang kiểm tra asset index...',
++        speedMBps: 0,
++        etaSeconds: null,
++      });
++    }
++  }
++  if (event.type === 'download-progress') handleMinecraftBootstrapProgress(event.payload);
++  if (event.type === 'download') sendLog({ level: 'debug', message: `[DOWNLOAD] ${event.file}` });
++  if (event.type === 'arguments') {
++    minecraftBootstrapPercent = 99.5;
++    sendProgress({
++      stage: 'launching',
++      percent: minecraftBootstrapPercent,
++      title: 'Đang tạo tiến trình game',
++      detail: 'Java arguments đã sẵn sàng.',
++      speedMBps: 0,
++      etaSeconds: null,
++    });
++  }
+   if (event.type === 'error') sendLog({ level: 'error', message: event.message });
+ });
+ 
