@@ -23,6 +23,7 @@ $builderCopy = "Copy-Item 'bestiary-build/electron-builder.json' `"`$PWD/source/
 if (-not $source.Contains($builderCopy)) { throw 'electron-builder copy marker missing.' }
 $patches = $builderCopy + "`n" +
   "python 'bestiary-v514/patch_sync_profile.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch Full/Lite sync semantics.' }`n" +
+  "python 'bestiary-v515/patch_android_manifest.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to preserve Android profile entries.' }`n" +
   "python 'bestiary-v515/patch_library.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to patch client library IPC.' }"
 $source = $source.Replace($builderCopy, $patches)
 
@@ -42,5 +43,6 @@ if ($content -notmatch 'classify\(' -or $content -notmatch 'fabric\.mod\.json' -
 if ($preload -notmatch 'webUtils\.getPathForFile' -or $ipc -notmatch 'importLibraryFiles') { throw 'Safe drag-drop IPC contract is missing.' }
 if ($main -notmatch 'library-import-auto' -or $main -notmatch 'library-choose-auto') { throw 'Automatic library IPC handlers are missing.' }
 if ($sync -notmatch 'isModJar' -or $sync -notmatch "this.profile === 'full'" -or $sync -notmatch 'entry.profiles.includes\(this.profile\)') { throw 'Full/Lite sync contract was lost.' }
+if ($sync -notmatch "profile === 'android'") { throw 'Android-only manifest entries would leak into desktop profiles.' }
 if (-not (Test-Path 'source/src/renderer/src/components/LibraryUx.css')) { throw 'Library UX stylesheet missing.' }
-Write-Host 'Bestiary Launcher 5.1.5 library, UX, and profile contracts verified.'
+Write-Host 'Bestiary Launcher 5.1.5 library, UX, desktop-profile, and Android-exclusion contracts verified.'
