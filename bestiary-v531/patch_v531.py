@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root = Path('source')
 
@@ -25,7 +26,8 @@ old = "    const offProgress = window.bestiary.onProgress(store.setProgress);"
 req(old in s, 'App progress subscription marker missing')
 new = """    const offProgress = window.bestiary.onProgress((event) => {\n      store.setProgress(event);\n      if (event.stage === 'idle') {\n        void window.bestiary.getSnapshot().then((snapshot) => {\n          if (mounted) store.setSnapshot(snapshot);\n        }).catch((error) => {\n          if (mounted) store.addLog({ level: 'error', message: `Không thể làm mới trạng thái Launcher: ${String(error)}` });\n        });\n      }\n    });"""
 s = s.replace(old, new, 1)
-s = s.replace("currentVersion: '5.3.0'", "currentVersion: '5.3.1'")
+s, count = re.subn(r"currentVersion:\s*'[^']+'", "currentVersion: '5.3.1'", s, count=1)
+req(count == 1 and "currentVersion: '5.3.1'" in s, 'Unable to pin Launcher updater version to 5.3.1')
 p.write_text(s, encoding='utf-8')
 
 # Make update checks resilient to stale GitHub/raw CDN objects. Never weaken
