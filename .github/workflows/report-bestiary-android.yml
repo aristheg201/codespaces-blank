@@ -1,0 +1,45 @@
+name: Report Bestiary Android Build
+
+on:
+  workflow_run:
+    workflows: ["Build Bestiary Android APKs 1.0.0"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write Android build status beacon
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")"
+          launcher="$(jq -r '.jobs[] | select(.name=="launcher") | .conclusion // "missing"' <<<"$jobs" | head -n1)"
+          manager="$(jq -r '.jobs[] | select(.name=="manager") | .conclusion // "missing"' <<<"$jobs" | head -n1)"
+          publish="$(jq -r '.jobs[] | select(.name=="publish") | .conclusion // "missing"' <<<"$jobs" | head -n1)"
+          jq -n \
+            --argjson runId "$RUN_ID" \
+            --arg runUrl "$RUN_URL" \
+            --arg conclusion "$CONCLUSION" \
+            --arg headSha "$HEAD_SHA" \
+            --arg launcher "$launcher" \
+            --arg manager "$manager" \
+            --arg publish "$publish" \
+            --arg generatedAt "$(date -u +%FT%TZ)" \
+            '{runId:$runId,runUrl:$runUrl,conclusion:$conclusion,headSha:$headSha,jobs:{launcher:$launcher,manager:$manager,publish:$publish},generatedAt:$generatedAt}' > status.json
+          content="$(base64 -w0 status.json)"
+          api="repos/${GITHUB_REPOSITORY}/contents/android-build-status.json"
+          sha="$(gh api "$api?ref=main" --jq .sha 2>/dev/null || true)"
+          args=(-X PUT "$api" -f message="Update Bestiary Android build status" -f content="$content" -f branch=main)
+          if [ -n "$sha" ]; then args+=(-f sha="$sha"); fi
+          gh api "${args[@]}" >/dev/null
