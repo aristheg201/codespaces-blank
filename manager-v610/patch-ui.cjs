@@ -35,10 +35,11 @@ const appPos=s.indexOf('function App()');
 if(appPos<0) throw new Error('Manager App position missing after v606 export patch');
 s=s.slice(0,appPos)+insert+s.slice(appPos);
 
-const progressRe=/(<ProgressOverlay\s*\/>)/;
-if(!progressRe.test(s)) throw new Error('ProgressOverlay render marker missing');
-s=s.replace(progressRe,'$1\n    <ManagerUpdate />');
+if(!s.includes('<><Empty/>')) throw new Error('Empty render marker missing');
+s=s.replace('<><Empty/>','<><Empty/><ManagerUpdate/>');
+if(!s.includes('<Sidebar/><main')) throw new Error('Sidebar render marker missing');
+s=s.replace('<Sidebar/><main','<Sidebar/><ManagerUpdate/><main');
 if(!s.includes('export default App;')) throw new Error('Manager default export lost');
 
 fs.writeFileSync(p,s);
-console.log('Manager 6.1.0 independent updater component patched.');
+console.log('Manager 6.1.0 independent updater component patched into real render branches.');
