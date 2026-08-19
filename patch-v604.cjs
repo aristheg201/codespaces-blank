@@ -18,8 +18,9 @@ settings=settings.replace("  serverPort: 25565,\n};", `  serverPort: 25565,\n  m
 const validationMarker = "    if (!Number.isInteger(serverPort) || serverPort < 1 || serverPort > 65535) throw new Error('Port phải nằm trong khoảng 1-65535.');";
 req(settings.includes(validationMarker),'validation marker missing');
 settings=settings.replace(validationMarker, validationMarker + `\n    const minecraftVersion = String(distribution.minecraftVersion ?? '').trim();\n    const fabricLoaderVersion = String(distribution.fabricLoaderVersion ?? '').trim();\n    const javaMajor = Number(distribution.javaMajor);\n    if (!/^\\d+\\.\\d+(?:\\.\\d+)?(?:[-+][0-9A-Za-z.-]+)?$/u.test(minecraftVersion)) throw new Error('Minecraft Version không hợp lệ.');\n    if (distribution.modLoader !== 'fabric') throw new Error('Bestiary hiện chỉ hỗ trợ Fabric loader.');\n    if (!/^\\d+\\.\\d+(?:\\.\\d+)?(?:[-+][0-9A-Za-z.-]+)?$/u.test(fabricLoaderVersion)) throw new Error('Fabric Loader Version không hợp lệ.');\n    if (!Number.isInteger(javaMajor) || javaMajor < 17 || javaMajor > 25) throw new Error('Java Runtime không hợp lệ.');`);
-req(settings.includes('      serverPort,\n    };'),'normalized settings marker missing');
-settings=settings.replace('      serverPort,\n    };', `      serverPort,\n      minecraftVersion,\n      modLoader: 'fabric',\n      fabricLoaderVersion,\n      javaMajor,\n    };`);
+const normalizedPattern = /this\.settings\.distribution = \{ \.\.\.DEFAULT_DISTRIBUTION, \.\.\.distribution, serverName, serverHost, serverPort \};/;
+req(normalizedPattern.test(settings),'normalized settings marker missing');
+settings=settings.replace(normalizedPattern, `this.settings.distribution = {\n      ...DEFAULT_DISTRIBUTION,\n      ...distribution,\n      serverName,\n      serverHost,\n      serverPort,\n      minecraftVersion,\n      modLoader: 'fabric',\n      fabricLoaderVersion,\n      javaMajor,\n    };`);
 fs.writeFileSync(settingsPath,settings);
 
 let service=read(servicePath);
