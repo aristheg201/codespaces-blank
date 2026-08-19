@@ -1,12 +1,12 @@
 {
-  "runId": 32212419549,
-  "runUrl": "https://github.com/aristheg201/codespaces-blank/actions/runs/32212419549",
+  "runId": 32212542953,
+  "runUrl": "https://github.com/aristheg201/codespaces-blank/actions/runs/32212542953",
   "conclusion": "failure",
-  "headSha": "b17dbb269954073b1e754c8d1d40ff4158c78812",
+  "headSha": "05db56696bdf99d29eeb66df7ae026977c464937",
   "jobs": {
     "launcher": "success",
-    "manager": "failure",
-    "publish": "skipped"
+    "manager": "success",
+    "publish": "failure"
   },
-  "generatedAt": "2026-08-19T03:34:09Z"
+  "generatedAt": "2026-08-19T03:36:26Z"
 }
