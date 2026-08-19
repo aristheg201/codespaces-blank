@@ -1,4 +1,4 @@
-name: Debug ManagedOwnership 5.1.0
+name: Debug Launcher 5.1.0 Source
 
 on:
   workflow_dispatch:
@@ -15,18 +15,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct and print ManagedOwnership
+      - name: Reconstruct base plus overlay and inspect types
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p source
           python - <<'PY'
           import base64, pathlib, tarfile, io
+          base_root = pathlib.Path('bestiary-build')
+          base_names = ['src5-00','src5-01','src5-02','src5-03a','src5-03b','src5-04','src5-05']
+          base = ''.join((base_root/n).read_text().strip() for n in base_names)
+          with tarfile.open(fileobj=io.BytesIO(base64.b64decode(base)),mode='r:gz') as tf:
+              tf.extractall('source')
           root = pathlib.Path('bestiary-v510-final/source')
           names = ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt']
           text = ''.join((root/n).read_text().strip() for n in names)
           text += '=' * ((4-len(text)%4)%4)
-          packed=base64.b64decode(text)
-          with tarfile.open(fileobj=io.BytesIO(packed),mode='r:gz') as tf:
+          with tarfile.open(fileobj=io.BytesIO(base64.b64decode(text)),mode='r:gz') as tf:
+              print('OVERLAY MEMBERS')
+              for m in tf.getmembers(): print(m.name)
               tf.extractall('source')
           PY
-          nl -ba source/src/main/core/ManagedOwnership.ts | sed -n '1,180p'
+          echo '=== TREE ==='
+          find source/src -maxdepth 4 -type f | sort
+          echo '=== IPC ==='
+          nl -ba source/src/shared/ipc.ts | sed -n '1,280p'
+          echo '=== JVM ==='
+          nl -ba source/src/main/core/JvmFlagGenerator.ts | sed -n '1,240p'
+          echo '=== REMOTE ==='
+          nl -ba source/src/main/core/RemoteService.ts | sed -n '1,260p'
+          echo '=== SETTINGS ==='
+          grep -R -n "interface LauncherSettings\|type LauncherSettings\|clientProfile\|GeneratedJvmFlags\|ModMetadata\|ClientProfileId" source/src | head -n 240 || true
