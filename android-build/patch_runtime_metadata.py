@@ -29,3 +29,6 @@ t = t.replace(marker, marker + '        BestiaryBootstrap.appendQuickPlayArgs(ja
 tools.write_text(t, encoding='utf-8')
 
 print('Bestiary runtime metadata + Quick Play patch applied')
+
+exec(Path('android-build/patch_offline_sync.py').read_text(encoding='utf-8'))
+exec(Path('android-build/patch_offline_compile_fix.py').read_text(encoding='utf-8'))
