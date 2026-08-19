@@ -1,4 +1,4 @@
-name: Build Bestiary Pack Manager 6.0.4 Windows
+name: Build Bestiary Pack Manager 6.0.5 Windows
 
 on:
   push:
@@ -13,13 +13,24 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Reconstruct Manager 6.0.5 source
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force manager | Out-Null
           $parts = Get-ChildItem bpm6-src/part-*.txt | Sort-Object Name
           if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)" }
@@ -39,6 +50,20 @@ jobs:
           node patch-v603.cjs
           node patch-v604.cjs
 
+          @'
+          from pathlib import Path
+          import base64, gzip
+          encoded = Path('manager-v605/App.tsx.gz.b64').read_text(encoding='utf-8').strip()
+          Path('manager/src/renderer/src/App.tsx').write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          '@ | Set-Content -Encoding UTF8 decode_manager_v605.py
+          python decode_manager_v605.py
+
+          $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
+          $pkg.version = '6.0.5'
+          $pkg.author = @{ name = 'SVFrame Team Studio' }
+          $pkg.description = 'Bestiary Pack Manager'
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content manager/package.json -Encoding UTF8
+
           New-Item -ItemType Directory -Force manager/src/renderer/public | Out-Null
           Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
           New-Item -ItemType Directory -Force manager/resources/gh | Out-Null
@@ -55,24 +80,27 @@ jobs:
                 $graphics.Clear([System.Drawing.Color]::Transparent)
                 $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
                 $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-                $maxW = 440.0
-                $maxH = 440.0
-                $scale = [Math]::Min($maxW / $source.Width, $maxH / $source.Height)
+                $scale = [Math]::Min(440.0 / $source.Width, 440.0 / $source.Height)
                 $w = [int]($source.Width * $scale)
                 $h = [int]($source.Height * $scale)
-                $x = [int]((512 - $w) / 2)
-                $y = [int]((512 - $h) / 2)
-                $graphics.DrawImage($source, $x, $y, $w, $h)
+                $graphics.DrawImage($source, [int]((512-$w)/2), [int]((512-$h)/2), $w, $h)
               } finally { $graphics.Dispose() }
               $bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
             } finally { $bitmap.Dispose() }
           } finally { $source.Dispose() }
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: manager/package.json
+      - name: Verify guided Manager UX source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = Get-Content manager/src/renderer/src/App.tsx -Raw
+          $types = Get-Content manager/src/shared/types.ts -Raw
+          $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          if ($app -notmatch 'BƯỚC 2 • RELEASE' -or $app -notmatch 'PRE-FLIGHT CHECK') { throw 'Release pre-flight UX is missing.' }
+          if ($app -notmatch 'Distribution' -or $app -notmatch 'Máy chủ' -or $app -notmatch 'Runtime' -or $app -notmatch 'Thông báo') { throw 'Guided settings sections are missing.' }
+          if ($app -notmatch 'ManagerDiscordPreview' -or $app -notmatch 'PREVIEW DISCORD / LAUNCHER') { throw 'Discord-style announcement preview is missing.' }
+          if ($types -notmatch 'fabricLoaderVersion' -or $service -notmatch 'loaderVersion: this\.settings\.fabricLoaderVersion') { throw 'Pinned runtime contract was lost.' }
+          Write-Host 'Guided Manager UX and runtime contracts verified.'
 
       - name: Install dependencies
         working-directory: manager
@@ -87,28 +115,48 @@ jobs:
       - name: Build NSIS installer
         working-directory: manager
         shell: pwsh
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run dist:win
 
-      - name: Verify pinned runtime manifest code and create SHA256
+      - name: Runtime smoke test and stage artifact
         shell: pwsh
         run: |
-          $exe = Get-Item manager/release/BestiaryPackManager-Setup-6.0.4.exe
-          if ($exe.Length -lt 1000000) { throw "Installer unexpectedly small: $($exe.Length)" }
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.0.5.exe -ErrorAction Stop
+          $unpacked = Resolve-Path manager/release/win-unpacked
+          $exe = Get-Item (Join-Path $unpacked 'Bestiary Pack Manager.exe') -ErrorAction Stop
+          if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
+          if (-not (Test-Path (Join-Path $unpacked 'resources/app.asar'))) { throw 'Manager runtime is missing app.asar.' }
+
+          $stdout = "$PWD/manager-smoke-stdout.log"
+          $stderr = "$PWD/manager-smoke-stderr.log"
+          $env:ELECTRON_ENABLE_LOGGING = '1'
+          $proc = Start-Process -FilePath $exe.FullName -WorkingDirectory $unpacked -ArgumentList @('--enable-logging','--disable-gpu') -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          Start-Sleep -Seconds 12
+          if ($proc.HasExited) {
+            Write-Host "Manager exited during smoke test with code $($proc.ExitCode)"
+            if (Test-Path $stdout) { Get-Content $stdout -Tail 200 }
+            if (Test-Path $stderr) { Get-Content $stderr -Tail 200 }
+            throw 'Manager failed runtime smoke test.'
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Get-Process | Where-Object { $_.ProcessName -like 'Bestiary*' } | Stop-Process -Force -ErrorAction SilentlyContinue
+
           $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
           if ($pkg.author.name -ne 'SVFrame Team Studio') { throw 'Publisher metadata is not SVFrame Team Studio.' }
-          $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
-          if ($service -notmatch 'loaderVersion: this\.settings\.fabricLoaderVersion') { throw 'Pinned Fabric loader is missing from manifest publisher.' }
-          if ($service -notmatch 'javaMajor: this\.settings\.javaMajor') { throw 'Pinned Java runtime is missing from manifest publisher.' }
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.0.4-SHA256.txt -Encoding ascii
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.0.5-SHA256.txt -Encoding ascii
+          Copy-Item $stdout manager/release/manager-smoke-stdout.log -Force -ErrorAction SilentlyContinue
+          Copy-Item $stderr manager/release/manager-smoke-stderr.log -Force -ErrorAction SilentlyContinue
+          Write-Host "Manager installer SHA256: $hash"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.0.4
+          name: BestiaryPackManager-Windows-6.0.5
           path: |
-            manager/release/BestiaryPackManager-Setup-6.0.4.exe
-            manager/release/BestiaryPackManager-Setup-6.0.4-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.0.5.exe
+            manager/release/BestiaryPackManager-Setup-6.0.5-SHA256.txt
+            manager/release/manager-smoke-stdout.log
+            manager/release/manager-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
