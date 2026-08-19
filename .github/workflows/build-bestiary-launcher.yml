@@ -39,14 +39,32 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force source | Out-Null
 
-          $parts = Get-ChildItem "bestiary-v510-final/source/part-*.txt" | Sort-Object Name
-          if ($parts.Count -ne 9) { throw "Expected 9 launcher source chunks, found $($parts.Count)" }
-          $sourceB64 = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ""
-          [IO.File]::WriteAllBytes("$PWD/launcher-code-5.1.0.tar.gz", [Convert]::FromBase64String($sourceB64))
-          tar -xzf "$PWD/launcher-code-5.1.0.tar.gz" -C "$PWD/source"
-          if ($LASTEXITCODE -ne 0) { throw "Unable to extract launcher source archive" }
-          if (-not (Test-Path "$PWD/source/package.json")) { throw "Launcher source reconstruction failed" }
+          # Reconstruct the last known-good launcher source. src5-03 was superseded
+          # by src5-03a + src5-03b and must not be concatenated with them.
+          $sourcePartNames = @(
+            "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
+          )
+          $sourceB64 = ($sourcePartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD/base-source.tar.gz", [Convert]::FromBase64String($sourceB64))
+          tar -xzf "$PWD/base-source.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract base launcher source archive" }
+          if (-not (Test-Path "$PWD/source/package.json")) { throw "Base launcher source reconstruction failed" }
 
+          # Apply the stable 5.x source-side fixes before the 5.1.0 overlay.
+          Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
+          Copy-Item "bestiary-build/electron-builder.json" "$PWD/source/electron-builder.json" -Force
+          Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
+
+          # 5.1.0 is stored as an overlay on top of the known-good 5.x source.
+          # This avoids the obsolete/corrected full-source chunks coexisting in
+          # bestiary-v510-final/source and corrupting a blind concatenation.
+          $overlayPartNames = @("part-00.txt", "part-01.txt", "part-02.txt", "part-03.txt", "part-04.txt")
+          $overlayB64 = ($overlayPartNames | ForEach-Object { (Get-Content "bestiary-v510/overlay/$_" -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD/v510-overlay.tar.gz", [Convert]::FromBase64String($overlayB64))
+          tar -xzf "$PWD/v510-overlay.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to apply Bestiary Launcher 5.1.0 overlay" }
+
+          # Keep the tested per-user NSIS installer behavior.
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
 
           $logoPartNames = @(
