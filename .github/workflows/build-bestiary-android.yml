@@ -1,17 +1,13 @@
 name: Build Bestiary Android APKs 1.0.0
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-  pull_request:
-    branches: [main]
   workflow_run:
     workflows: ["Debug Manager 6.0.3 Source"]
     types: [completed]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   launcher:
@@ -85,7 +81,7 @@ jobs:
           cp "$APK" launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk
           sha256sum launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk > launcher-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
           test "$(stat -c%s launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk)" -gt 10000000
-      - name: Upload Launcher APK
+      - name: Upload Launcher artifact
         uses: actions/upload-artifact@v4
         with:
           name: BestiaryLauncher-Android-1.0.0-debug
@@ -150,10 +146,44 @@ jobs:
           cp "$APK" manager-output/BestiaryManager-Android-1.0.0-debug.apk
           sha256sum manager-output/BestiaryManager-Android-1.0.0-debug.apk > manager-output/BestiaryManager-Android-1.0.0-debug-SHA256.txt
           test "$(stat -c%s manager-output/BestiaryManager-Android-1.0.0-debug.apk)" -gt 50000
-      - name: Upload Manager APK
+      - name: Upload Manager artifact
         uses: actions/upload-artifact@v4
         with:
           name: BestiaryManager-Android-1.0.0-debug
           path: manager-output/*
           if-no-files-found: error
           retention-days: 7
+
+  publish:
+    needs: [launcher, manager]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Launcher artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Android-1.0.0-debug
+          path: release-files
+      - name: Download Manager artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryManager-Android-1.0.0-debug
+          path: release-files
+      - name: Validate release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release-files/BestiaryLauncher-Android-1.0.0-debug.apk
+          test -s release-files/BestiaryManager-Android-1.0.0-debug.apk
+          (cd release-files && sha256sum -c BestiaryLauncher-Android-1.0.0-debug-SHA256.txt)
+          (cd release-files && sha256sum -c BestiaryManager-Android-1.0.0-debug-SHA256.txt)
+      - name: Publish debug APK release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="bestiary-android-1.0.0-debug"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Bestiary Android 1.0.0 Debug" --notes "Debug-signed Android builds for Bestiary Launcher and Bestiary Pack Manager. Minecraft 1.21.1 / Fabric 0.18.4 / Java 21 defaults; runtime metadata remains manager-controlled."
+          fi
+          gh release upload "$TAG" release-files/* --clobber
