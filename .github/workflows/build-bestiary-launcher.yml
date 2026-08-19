@@ -86,6 +86,7 @@ jobs:
           Copy-Item "bestiary-v510-final/fixes/ipc.ts" "$PWD/source/src/shared/ipc.ts" -Force
           Copy-Item "bestiary-v510-final/fixes/SettingsStore.ts" "$PWD/source/src/main/core/SettingsStore.ts" -Force
           Copy-Item "bestiary-v510-final/fixes/preload-index.ts" "$PWD/source/src/preload/index.ts" -Force
+          Copy-Item "bestiary-v510-final/fixes/App.tsx" "$PWD/source/src/renderer/src/App.tsx" -Force
           Copy-Item "bestiary-v510-final/fixes/Home.tsx" "$PWD/source/src/renderer/src/components/Home.tsx" -Force
           Copy-Item "bestiary-v510-final/fixes/ProfileChooser.tsx" "$PWD/source/src/renderer/src/components/ProfileChooser.tsx" -Force
           Copy-Item "bestiary-v510-final/fixes/SettingsModal.tsx" "$PWD/source/src/renderer/src/components/SettingsModal.tsx" -Force
