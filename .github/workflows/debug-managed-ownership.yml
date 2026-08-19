@@ -1,9 +1,11 @@
 name: Debug Launcher Renderer Source
 
 on:
-  workflow_dispatch:
   push:
     branches: [bestiary-launcher-v5-1-0]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
