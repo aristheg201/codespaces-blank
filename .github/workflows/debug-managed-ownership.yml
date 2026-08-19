@@ -1,0 +1,30 @@
+name: Debug ManagedOwnership 5.1.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [bestiary-launcher-v5-1-0]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and print ManagedOwnership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, pathlib, tarfile, io
+          root = pathlib.Path('bestiary-v510-final/source')
+          names = ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt']
+          text = ''.join((root/n).read_text().strip() for n in names)
+          text += '=' * ((4-len(text)%4)%4)
+          packed=base64.b64decode(text)
+          with tarfile.open(fileobj=io.BytesIO(packed),mode='r:gz') as tf:
+              tf.extractall('source')
+          PY
+          nl -ba source/src/main/core/ManagedOwnership.ts | sed -n '1,180p'
