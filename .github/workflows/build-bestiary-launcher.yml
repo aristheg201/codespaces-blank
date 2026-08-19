@@ -1,4 +1,4 @@
-name: Build Bestiary Launcher 5.1.0
+name: Build Bestiary Launcher 5.1.1
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Reconstruct Bestiary Launcher 5.1.0 source
+      - name: Reconstruct Bestiary Launcher 5.1.1 source
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -71,13 +71,13 @@ jobs:
               target.parent.mkdir(parents=True, exist_ok=True)
               target.write_bytes(raw[data0:data0+size])
               recovered.append(name)
-          print('Recovered 5.1.0 files:', len(recovered))
-          required = ['src/main/index.ts','src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/SyncEngine.ts','src/main/core/RemoteService.ts','src/shared/ipc.ts','src/renderer/src/App.tsx','src/renderer/src/components/LibraryModal.tsx']
+          required = ['src/main/index.ts','src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/Launcher.ts','src/main/core/SyncEngine.ts','src/main/core/RemoteService.ts','src/shared/ipc.ts','src/renderer/src/App.tsx','src/renderer/src/components/LibraryModal.tsx']
           missing = [name for name in required if name not in recovered]
           if missing: raise SystemExit('Missing required recovered files: ' + ', '.join(missing))
+          print('Recovered launcher files:', len(recovered))
           '@ | Set-Content -Encoding UTF8 recover_overlay.py
           python recover_overlay.py
-          if ($LASTEXITCODE -ne 0) { throw "Unable to recover Bestiary Launcher 5.1.0 overlay" }
+          if ($LASTEXITCODE -ne 0) { throw "Unable to recover Bestiary Launcher overlay" }
 
           Copy-Item "bestiary-v510-final/fixes/ipc.ts" "$PWD/source/src/shared/ipc.ts" -Force
           Copy-Item "bestiary-v510-final/fixes/SettingsStore.ts" "$PWD/source/src/main/core/SettingsStore.ts" -Force
@@ -106,7 +106,7 @@ jobs:
 
           Push-Location source
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $pkg.version = "5.1.0"
+          $pkg.version = "5.1.1"
           $pkg.author = "SVFrame Team Studio"
           $pkg | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 package.json
           Pop-Location
@@ -119,6 +119,20 @@ jobs:
           New-Item -ItemType Directory -Force "$PWD/source/src/renderer/public" | Out-Null
           [IO.File]::WriteAllBytes("$PWD/source/resources/logo.png", [Convert]::FromBase64String($logoB64))
           Copy-Item "$PWD/source/resources/logo.png" "$PWD/source/src/renderer/public/logo.png" -Force
+
+      - name: Verify pinned Minecraft and Fabric runtime contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $remote = Get-Content "$PWD/source/src/main/core/RemoteService.ts" -Raw
+          $launcherCore = Get-Content "$PWD/source/src/main/core/Launcher.ts" -Raw
+          $constants = Get-Content "$PWD/source/src/shared/constants.ts" -Raw
+          if ($remote -notmatch 'loaderVersion') { throw 'Remote manifest loaderVersion support is missing.' }
+          if ($remote -notmatch 'defaultFabricLoader') { throw 'config.json defaultFabricLoader fallback is missing.' }
+          if (($remote + $launcherCore + $constants) -notmatch 'DEFAULT_FABRIC_LOADER') { throw 'Pinned Fabric fallback constant is missing.' }
+          if ($launcherCore -notmatch '(?i)fabric') { throw 'Fabric runtime stage is missing from launcher core.' }
+          if (($remote + $launcherCore) -match '(?is)fabric.{0,48}\blatest\b|\blatest\b.{0,48}fabric') { throw 'Launcher must not auto-select latest Fabric Loader.' }
+          Write-Host 'Pinned runtime contract verified: manifest loaderVersion -> config defaultFabricLoader -> fixed fallback.'
 
       - name: Generate Windows icon
         shell: pwsh
@@ -154,19 +168,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $installer = Get-Item "$PWD/source/release/BestiaryLauncher-Setup-5.1.0.exe" -ErrorAction Stop
+          $installer = Get-Item "$PWD/source/release/BestiaryLauncher-Setup-5.1.1.exe" -ErrorAction Stop
           $launcher = Get-Item "$PWD/source/release/win-unpacked/Bestiary Launcher.exe" -ErrorAction Stop
           if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
           if ($launcher.Length -lt 1000000) { throw "Launcher executable unexpectedly small: $($launcher.Length)" }
 
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
-          Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -Force
+          Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.1.1.exe" -Force
           Copy-Item $launcher.FullName "$PWD/build-output/Bestiary Launcher.exe" -Force
 
           $installerHash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           $launcherHash = (Get-FileHash $launcher.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$installerHash  BestiaryLauncher-Setup-5.1.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt"
-          "$launcherHash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
+          "$installerHash  BestiaryLauncher-Setup-5.1.1.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.1.1-SHA256.txt"
+          "$launcherHash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.1-EXE-SHA256.txt"
 
           Write-Host "Installer bytes: $($installer.Length)"
           Write-Host "Launcher bytes:  $($launcher.Length)"
@@ -175,11 +189,11 @@ jobs:
       - name: Upload verified launcher artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.1.0
+          name: BestiaryLauncher-Windows-5.1.1
           path: |
-            build-output/BestiaryLauncher-Setup-5.1.0.exe
-            build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt
+            build-output/BestiaryLauncher-Setup-5.1.1.exe
+            build-output/BestiaryLauncher-Setup-5.1.1-SHA256.txt
             build-output/Bestiary Launcher.exe
-            build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt
+            build-output/BestiaryLauncher-5.1.1-EXE-SHA256.txt
           if-no-files-found: error
           retention-days: 7
