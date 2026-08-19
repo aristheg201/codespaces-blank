@@ -32,40 +32,36 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          @'
-          import base64, pathlib, tarfile, io, shutil
-          root = pathlib.Path('bestiary-v510-final/source')
-          candidates = [
-              ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
-              ['part-00.txt','part-01a1-0.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
-          ]
-          out = pathlib.Path('source')
-          out.mkdir(exist_ok=True)
-          errors = []
-          for i, names in enumerate(candidates, 1):
-              try:
-                  text = ''.join((root / n).read_text(encoding='utf-8').strip() for n in names)
-                  text += '=' * ((4 - len(text) % 4) % 4)
-                  packed = base64.b64decode(text, validate=True)
-                  with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as tf:
-                      members = tf.getmembers()
-                      if not any(m.name.endswith('package.json') for m in members):
-                          raise RuntimeError('package.json not found in archive')
-                      print(f'using source candidate {i}: {names}; encoded={len(text)} packed={len(packed)} members={len(members)}')
-                      tf.extractall(out)
-                  break
-              except Exception as exc:
-                  errors.append(f'candidate {i}: {exc!r}')
-                  for child in list(out.iterdir()):
-                      shutil.rmtree(child) if child.is_dir() else child.unlink()
-          else:
-              raise SystemExit('No valid 5.1.0 source candidate. ' + ' | '.join(errors))
-          '@ | Set-Content -Encoding UTF8 reconstruct.py
-          python reconstruct.py
-          if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct Bestiary Launcher 5.1.0 source" }
-          if (-not (Test-Path "$PWD/source/package.json")) { throw "Launcher source reconstruction did not produce package.json" }
+          New-Item -ItemType Directory -Force "$PWD/source" | Out-Null
 
+          # Restore the complete last known-good 5.x source first.
+          $baseParts = @("src5-00","src5-01","src5-02","src5-03a","src5-03b","src5-04","src5-05")
+          $baseB64 = ($baseParts | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD/base-source.tar.gz", [Convert]::FromBase64String($baseB64))
+          tar -xzf "$PWD/base-source.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct complete base launcher source" }
+          if (-not (Test-Path "$PWD/source/package.json")) { throw "Base source is missing package.json" }
+
+          # The 5.1.0 archive contains the files changed for 5.1.0, not a complete project.
+          # Apply it on top of the full 5.x source, preserving shared IPC and unchanged modules.
+          @'
+          import base64, pathlib, tarfile, io
+          root = pathlib.Path('bestiary-v510-final/source')
+          names = ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt']
+          text = ''.join((root / n).read_text(encoding='utf-8').strip() for n in names)
+          text += '=' * ((4 - len(text) % 4) % 4)
+          packed = base64.b64decode(text, validate=True)
+          with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as tf:
+              members = tf.getmembers()
+              print(f'applying 5.1.0 overlay: encoded={len(text)} packed={len(packed)} members={len(members)}')
+              tf.extractall('source')
+          '@ | Set-Content -Encoding UTF8 reconstruct_overlay.py
+          python reconstruct_overlay.py
+          if ($LASTEXITCODE -ne 0) { throw "Unable to apply Bestiary Launcher 5.1.0 source overlay" }
+
+          # One archived source member was damaged during the earlier chunk split.
           Copy-Item "bestiary-v510-final/fixes/ManagedOwnership.ts" "$PWD/source/src/main/core/ManagedOwnership.ts" -Force
+
           New-Item -ItemType Directory -Force "$PWD/source/build" | Out-Null
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
           $logoPartNames = @("logo5-00a","logo5-00b","logo5-01a","logo5-01b","logo5-02","logo5-03","logo5-04a","logo5-04b")
