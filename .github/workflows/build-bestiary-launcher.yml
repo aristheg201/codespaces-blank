@@ -1,4 +1,4 @@
-name: Build Bestiary Launcher 5.3.2
+name: Build Bestiary Launcher 5.3.3
 
 on:
   push:
@@ -46,23 +46,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build and runtime-test Launcher 5.3.2
+      - name: Build and runtime-test Launcher 5.3.3
         shell: pwsh
-        run: ./bestiary-v532/build.ps1
+        run: ./bestiary-v533/build.ps1
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.3.2
+          name: BestiaryLauncher-Windows-5.3.3
           path: |
-            build-output-v532/BestiaryLauncher-Setup-5.3.2.exe
-            build-output-v532/BestiaryLauncher-Setup-5.3.2-SHA256.txt
-            build-output-v532/BestiaryLauncher-Portable-5.3.2.zip
-            build-output-v532/BestiaryLauncher-Portable-5.3.2-SHA256.txt
-            build-output-v532/bestiary-skin-bridge-1.0.0.jar
-            build-output-v532/bestiary-skin-bridge-1.0.0-SHA256.txt
-            build-output-v532/runtime-smoke-stdout.log
-            build-output-v532/runtime-smoke-stderr.log
+            build-output-v533/BestiaryLauncher-Setup-5.3.3.exe
+            build-output-v533/BestiaryLauncher-Setup-5.3.3-SHA256.txt
+            build-output-v533/BestiaryLauncher-Portable-5.3.3.zip
+            build-output-v533/BestiaryLauncher-Portable-5.3.3-SHA256.txt
+            build-output-v533/bestiary-skin-bridge-1.0.0.jar
+            build-output-v533/bestiary-skin-bridge-1.0.0-SHA256.txt
+            build-output-v533/runtime-smoke-stdout.log
+            build-output-v533/runtime-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
 
@@ -73,9 +73,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'launcher-v5.3.2'
+          $tag = 'launcher-v5.3.3'
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.2' --notes 'Refresh distribution/account configuration when opening account management so newly-published Microsoft Client ID and remote version become available without restarting Launcher. Includes 5.3.1 process lifecycle and updater cache hotfixes.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.3' --notes 'Clarifies server-local/offline identity as separate from Microsoft and Java Edition Game Service APIs. Removes crack terminology from player-facing UI while preserving Microsoft entitlement verification, skin management, 5.3.2 fresh remote refresh, lifecycle fixes and SHA-verified auto updater.'
           }
-          gh release upload $tag build-output-v532/BestiaryLauncher-Setup-5.3.2.exe build-output-v532/BestiaryLauncher-Setup-5.3.2-SHA256.txt build-output-v532/BestiaryLauncher-Portable-5.3.2.zip build-output-v532/BestiaryLauncher-Portable-5.3.2-SHA256.txt build-output-v532/bestiary-skin-bridge-1.0.0.jar build-output-v532/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
+          gh release upload $tag build-output-v533/BestiaryLauncher-Setup-5.3.3.exe build-output-v533/BestiaryLauncher-Setup-5.3.3-SHA256.txt build-output-v533/BestiaryLauncher-Portable-5.3.3.zip build-output-v533/BestiaryLauncher-Portable-5.3.3-SHA256.txt build-output-v533/bestiary-skin-bridge-1.0.0.jar build-output-v533/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
