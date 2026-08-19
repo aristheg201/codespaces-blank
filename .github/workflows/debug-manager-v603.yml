@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [bestiary-manager-v7-final]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct and print targeted manager files
+      - name: Reconstruct manager source
         shell: bash
         run: |
           set -euo pipefail
@@ -28,7 +30,9 @@ jobs:
           cp authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts
           node authfix-src/patch-auth.cjs
           node patch-v602.cjs
-          for f in manager/src/renderer/src/App.tsx manager/src/main/services/GithubDistributionService.ts manager/src/main/services/SettingsService.ts manager/electron-builder.json manager/package.json; do
-            echo "===== $f ====="
-            cat "$f"
-          done
+      - name: Upload reconstructed source
+        uses: actions/upload-artifact@v4
+        with:
+          name: manager-source-inspect
+          path: manager
+          retention-days: 1
