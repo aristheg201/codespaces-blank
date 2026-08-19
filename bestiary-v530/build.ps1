@@ -15,6 +15,7 @@ $copies = $homeCss + "`n" +
   "Copy-Item 'bestiary-v515/fixes/ContentManager.ts' `"`$PWD/source/src/main/core/ContentManager.ts`" -Force`n" +
   "Copy-Item 'bestiary-v515/fixes/LibraryModal.tsx' `"`$PWD/source/src/renderer/src/components/LibraryModal.tsx`" -Force`n" +
   "Copy-Item 'bestiary-v515/fixes/LibraryUx.css' `"`$PWD/source/src/renderer/src/components/LibraryUx.css`" -Force`n" +
+  "Copy-Item 'bestiary-v520/fixes/App.tsx' `"`$PWD/source/src/renderer/src/App.tsx`" -Force`n" +
   "Copy-Item 'bestiary-v520/fixes/ContentScreen.tsx' `"`$PWD/source/src/renderer/src/components/ContentScreen.tsx`" -Force`n" +
   "Copy-Item 'bestiary-v520/fixes/ContentScreen.css' `"`$PWD/source/src/renderer/src/components/ContentScreen.css`" -Force`n" +
   "Copy-Item 'bestiary-v520/fixes/AppUpdate.css' `"`$PWD/source/src/renderer/src/components/AppUpdate.css`" -Force`n" +
