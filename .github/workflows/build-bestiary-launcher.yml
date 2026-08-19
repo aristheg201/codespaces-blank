@@ -33,7 +33,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           @'
-          import base64, pathlib, tarfile, io
+          import base64, pathlib, tarfile, io, shutil
 
           root = pathlib.Path('bestiary-v510-final/source')
           candidates = [
@@ -46,21 +46,19 @@ jobs:
           for i, names in enumerate(candidates, 1):
               try:
                   text = ''.join((root / n).read_text(encoding='utf-8').strip() for n in names)
+                  text += '=' * ((4 - len(text) % 4) % 4)
                   packed = base64.b64decode(text, validate=True)
                   with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as tf:
                       members = tf.getmembers()
                       if not any(m.name.endswith('package.json') for m in members):
                           raise RuntimeError('package.json not found in archive')
-                      print(f'using source candidate {i}: {names}; members={len(members)}')
+                      print(f'using source candidate {i}: {names}; encoded={len(text)} packed={len(packed)} members={len(members)}')
                       tf.extractall(out)
                   break
               except Exception as exc:
                   errors.append(f'candidate {i}: {exc!r}')
-                  for child in out.iterdir():
-                      if child.is_dir():
-                          import shutil; shutil.rmtree(child)
-                      else:
-                          child.unlink()
+                  for child in list(out.iterdir()):
+                      shutil.rmtree(child) if child.is_dir() else child.unlink()
           else:
               raise SystemExit('No valid 5.1.0 source candidate. ' + ' | '.join(errors))
           '@ | Set-Content -Encoding UTF8 reconstruct.py
