@@ -37,8 +37,8 @@ jobs:
 
           root = pathlib.Path('bestiary-v510-final/source')
           candidates = [
-              ['part-00.txt','part-01a1-0.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
               ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
+              ['part-00.txt','part-01a1-0.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt'],
           ]
           out = pathlib.Path('source')
           out.mkdir(exist_ok=True)
