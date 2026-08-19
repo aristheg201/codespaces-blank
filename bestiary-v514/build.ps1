@@ -8,6 +8,7 @@ $needle = "Copy-Item 'bestiary-v510-final/fixes/Home.css' `"`$PWD/source/src/ren
 if (-not $source.Contains($needle)) { throw 'Home.css copy marker missing in runtime-verified base build script.' }
 $replacement = $needle + "`n" +
   "Copy-Item 'bestiary-v510-final/fixes/UxPanels.css' `"`$PWD/source/src/renderer/src/components/UxPanels.css`" -Force`n" +
+  "Copy-Item 'bestiary-v510-final/fixes/LauncherUx.css' `"`$PWD/source/src/renderer/src/components/LauncherUx.css`" -Force`n" +
   "Copy-Item 'bestiary-v510-final/fixes/DiscordText.tsx' `"`$PWD/source/src/renderer/src/components/DiscordText.tsx`" -Force`n" +
   "Copy-Item 'bestiary-v510-final/fixes/AnnouncementModal.tsx' `"`$PWD/source/src/renderer/src/components/AnnouncementModal.tsx`" -Force"
 $source = $source.Replace($needle, $replacement)
