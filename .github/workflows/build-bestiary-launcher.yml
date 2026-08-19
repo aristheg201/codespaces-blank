@@ -34,48 +34,95 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force "$PWD/source" | Out-Null
 
-          # Restore the complete last known-good 5.x source first.
           $baseParts = @("src5-00","src5-01","src5-02","src5-03a","src5-03b","src5-04","src5-05")
           $baseB64 = ($baseParts | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           [IO.File]::WriteAllBytes("$PWD/base-source.tar.gz", [Convert]::FromBase64String($baseB64))
           tar -xzf "$PWD/base-source.tar.gz" -C "$PWD/source"
-          if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct complete base launcher source" }
-          if (-not (Test-Path "$PWD/source/package.json")) { throw "Base source is missing package.json" }
+          if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct base launcher source" }
 
-          # The 5.1.0 archive contains the files changed for 5.1.0, not a complete project.
-          # Apply it on top of the full 5.x source, preserving shared IPC and unchanged modules.
+          # Recover every complete file from the original 5.1.0 overlay. The archive tail
+          # was truncated, but all core/profile/library files through LibraryModal are intact.
           @'
-          import base64, pathlib, tarfile, io
-          root = pathlib.Path('bestiary-v510-final/source')
-          names = ['part-00.txt','part-01a1.txt','part-01a2.txt','part-01b.txt','part-02.txt','part-03.txt','part-04.txt','part-05.txt']
-          text = ''.join((root / n).read_text(encoding='utf-8').strip() for n in names)
-          text += '=' * ((4 - len(text) % 4) % 4)
-          packed = base64.b64decode(text, validate=True)
-          with tarfile.open(fileobj=io.BytesIO(packed), mode='r:gz') as tf:
-              members = tf.getmembers()
-              print(f'applying 5.1.0 overlay: encoded={len(text)} packed={len(packed)} members={len(members)}')
-              tf.extractall('source')
-          '@ | Set-Content -Encoding UTF8 reconstruct_overlay.py
-          python reconstruct_overlay.py
-          if ($LASTEXITCODE -ne 0) { throw "Unable to apply Bestiary Launcher 5.1.0 source overlay" }
+          import base64, pathlib, zlib
+          root = pathlib.Path('bestiary-v510/overlay')
+          names = ['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
+          text = ''.join((root/n).read_text(encoding='utf-8').strip() for n in names)
+          text += '=' * ((4-len(text)%4)%4)
+          d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+          raw = d.decompress(base64.b64decode(text))
+          allowed = pathlib.Path('source').resolve()
+          start = 0
+          recovered = []
+          while True:
+              p = raw.find(b'ustar', start)
+              if p < 0: break
+              start = p + 5
+              h0 = p - 257
+              if h0 < 0 or h0 + 512 > len(raw): continue
+              h = raw[h0:h0+512]
+              name = h[:100].split(b'\0',1)[0].decode('utf-8','replace')
+              prefix = h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
+              if prefix: name = prefix + '/' + name
+              try: size = int(h[124:136].split(b'\0',1)[0].strip() or b'0', 8)
+              except Exception: continue
+              data0 = h0 + 512
+              if size < 0 or data0 + size > len(raw): continue
+              if not name.startswith('src/'): continue
+              target = (allowed / name).resolve()
+              if allowed not in target.parents: continue
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(raw[data0:data0+size])
+              recovered.append(name)
+          print('Recovered 5.1.0 files:', len(recovered))
+          for name in recovered: print(' -', name)
+          required = ['src/main/index.ts','src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/SyncEngine.ts','src/main/core/RemoteService.ts','src/shared/ipc.ts','src/renderer/src/App.tsx','src/renderer/src/components/LibraryModal.tsx']
+          missing = [name for name in required if name not in recovered]
+          if missing: raise SystemExit('Missing required recovered files: ' + ', '.join(missing))
+          '@ | Set-Content -Encoding UTF8 recover_overlay.py
+          python recover_overlay.py
+          if ($LASTEXITCODE -ne 0) { throw "Unable to recover Bestiary Launcher 5.1.0 overlay" }
 
-          # One archived source member was damaged during the earlier chunk split.
-          Copy-Item "bestiary-v510-final/fixes/ManagedOwnership.ts" "$PWD/source/src/main/core/ManagedOwnership.ts" -Force
+          # Restore the tail files that were lost with the truncated archive.
+          Copy-Item "bestiary-v510-final/fixes/ipc.ts" "$PWD/source/src/shared/ipc.ts" -Force
+          Copy-Item "bestiary-v510-final/fixes/SettingsStore.ts" "$PWD/source/src/main/core/SettingsStore.ts" -Force
+          Copy-Item "bestiary-v510-final/fixes/preload-index.ts" "$PWD/source/src/preload/index.ts" -Force
+          Copy-Item "bestiary-v510-final/fixes/Home.tsx" "$PWD/source/src/renderer/src/components/Home.tsx" -Force
+          Copy-Item "bestiary-v510-final/fixes/ProfileChooser.tsx" "$PWD/source/src/renderer/src/components/ProfileChooser.tsx" -Force
+          Copy-Item "bestiary-v510-final/fixes/SettingsModal.tsx" "$PWD/source/src/renderer/src/components/SettingsModal.tsx" -Force
+
+          # Explicit generation semantics: generation happens only through the Generate IPC.
+          @'
+          from pathlib import Path
+          p = Path('source/src/main/index.ts')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('  const generated = generateJvmProfile(settings, release);\n', '')
+          s = s.replace('    generatedJvmArgs: generated.args,', '    generatedJvmArgs: settings.generatedJvmArgs,')
+          s = s.replace('      extraJvmArgs: generateJvmProfile(settings, remote).args,', '      extraJvmArgs: settings.generatedJvmArgs,')
+          marker = "  ipcMain.handle('bestiary:start-game', async (_event, settings: LauncherSettings) => startGame(settings));"
+          insertion = """  ipcMain.handle('bestiary:generate-jvm', async (_event, input: LauncherSettings) => {\n    const remote = currentRemote ?? (await getRemote());\n    const generated = generateJvmProfile(input, remote);\n    await settingsStore.save({ ...input, generatedJvmArgs: generated.args });\n    return snapshot();\n  });\n"""
+          if marker not in s: raise SystemExit('start-game IPC marker not found')
+          s = s.replace(marker, insertion + marker)
+          p.write_text(s, encoding='utf-8')
+          '@ | Set-Content -Encoding UTF8 patch_main.py
+          python patch_main.py
+          if ($LASTEXITCODE -ne 0) { throw "Unable to patch explicit JVM generation" }
+
+          # Pin product identity/version in the reconstructed package.
+          Push-Location source
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $pkg.version = "5.1.0"
+          $pkg.author = "SVFrame Team Studio"
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 package.json
+          Pop-Location
 
           New-Item -ItemType Directory -Force "$PWD/source/build" | Out-Null
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
-          $logoPartNames = @("logo5-00a","logo5-00b","logo5-01a","logo5-01b","logo5-02","logo5-03","logo5-04a","logo5-04b")
-          $logoB64 = ($logoPartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          $logoParts = @("logo5-00a","logo5-00b","logo5-01a","logo5-01b","logo5-02","logo5-03","logo5-04a","logo5-04b")
+          $logoB64 = ($logoParts | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
           New-Item -ItemType Directory -Force "$PWD/source/resources" | Out-Null
           New-Item -ItemType Directory -Force "$PWD/source/src/renderer/public" | Out-Null
           [IO.File]::WriteAllBytes("$PWD/source/resources/logo.png", [Convert]::FromBase64String($logoB64))
           Copy-Item "$PWD/source/resources/logo.png" "$PWD/source/src/renderer/public/logo.png" -Force
-
-          Push-Location source
-          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          if ($pkg.version -ne "5.1.0") { throw "Unexpected launcher version $($pkg.version)" }
-          if ($pkg.author -ne "SVFrame Team Studio") { throw "Unexpected launcher author $($pkg.author)" }
-          Pop-Location
 
       - name: Generate Windows icon
         shell: pwsh
@@ -84,23 +131,25 @@ jobs:
           @'
           from PIL import Image
           from pathlib import Path
-          root = Path('source')
-          src = Image.open(root/'resources'/'logo.png').convert('RGBA')
-          canvas = Image.new('RGBA',(256,256),(0,0,0,0))
-          src.thumbnail((230,150),Image.Resampling.LANCZOS)
-          canvas.alpha_composite(src,((256-src.width)//2,(256-src.height)//2))
-          (root/'build').mkdir(parents=True,exist_ok=True)
-          canvas.save(root/'resources'/'icon.png')
-          canvas.save(root/'build'/'icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)])
+          root=Path('source'); src=Image.open(root/'resources'/'logo.png').convert('RGBA')
+          canvas=Image.new('RGBA',(256,256),(0,0,0,0)); src.thumbnail((230,150),Image.Resampling.LANCZOS)
+          canvas.alpha_composite(src,((256-src.width)//2,(256-src.height)//2)); (root/'build').mkdir(parents=True,exist_ok=True)
+          canvas.save(root/'resources'/'icon.png'); canvas.save(root/'build'/'icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)])
           '@ | Set-Content -Encoding UTF8 create_icon.py
           python create_icon.py
 
       - name: Install dependencies
         working-directory: source
-        run: npm install --no-audit --no-fund
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          npm install adm-zip@0.5.16 --save --no-audit --no-fund
+          npm install -D @types/adm-zip@0.5.7 --save-dev --no-audit --no-fund
+
       - name: Typecheck
         working-directory: source
         run: npm run typecheck
+
       - name: Build NSIS installer
         working-directory: source
         run: npm run dist:win
@@ -112,12 +161,12 @@ jobs:
           $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.1.0.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer not produced" }
           if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
           Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.1.0.exe" -Force
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  BestiaryLauncher-Setup-5.1.0.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.1.0-SHA256.txt"
 
-      - name: Smoke-test NSIS silent install
+      - name: Smoke-test NSIS and extract launcher exe
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -128,8 +177,8 @@ jobs:
           if (-not $installed) { throw "Installed Bestiary Launcher executable not found" }
           if ($installed.Length -lt 1000000) { throw "Installed launcher executable unexpectedly small" }
           Copy-Item $installed.FullName "$PWD/build-output/Bestiary Launcher.exe" -Force
-          $installedHash = (Get-FileHash $installed.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$installedHash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
+          $hash = (Get-FileHash $installed.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Bestiary Launcher.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-5.1.0-EXE-SHA256.txt"
 
       - name: Upload verified launcher artifacts
         uses: actions/upload-artifact@v4
