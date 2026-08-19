@@ -40,8 +40,6 @@ jobs:
           tar -xzf "$PWD/base-source.tar.gz" -C "$PWD/source"
           if ($LASTEXITCODE -ne 0) { throw "Unable to reconstruct base launcher source" }
 
-          # Recover every complete file from the original 5.1.0 overlay. The archive tail
-          # was truncated, but all core/profile/library files through LibraryModal are intact.
           @'
           import base64, pathlib, zlib
           root = pathlib.Path('bestiary-v510/overlay')
@@ -74,7 +72,6 @@ jobs:
               target.write_bytes(raw[data0:data0+size])
               recovered.append(name)
           print('Recovered 5.1.0 files:', len(recovered))
-          for name in recovered: print(' -', name)
           required = ['src/main/index.ts','src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/SyncEngine.ts','src/main/core/RemoteService.ts','src/shared/ipc.ts','src/renderer/src/App.tsx','src/renderer/src/components/LibraryModal.tsx']
           missing = [name for name in required if name not in recovered]
           if missing: raise SystemExit('Missing required recovered files: ' + ', '.join(missing))
@@ -82,7 +79,6 @@ jobs:
           python recover_overlay.py
           if ($LASTEXITCODE -ne 0) { throw "Unable to recover Bestiary Launcher 5.1.0 overlay" }
 
-          # Restore the tail files that were lost with the truncated archive.
           Copy-Item "bestiary-v510-final/fixes/ipc.ts" "$PWD/source/src/shared/ipc.ts" -Force
           Copy-Item "bestiary-v510-final/fixes/SettingsStore.ts" "$PWD/source/src/main/core/SettingsStore.ts" -Force
           Copy-Item "bestiary-v510-final/fixes/preload-index.ts" "$PWD/source/src/preload/index.ts" -Force
@@ -90,8 +86,8 @@ jobs:
           Copy-Item "bestiary-v510-final/fixes/Home.tsx" "$PWD/source/src/renderer/src/components/Home.tsx" -Force
           Copy-Item "bestiary-v510-final/fixes/ProfileChooser.tsx" "$PWD/source/src/renderer/src/components/ProfileChooser.tsx" -Force
           Copy-Item "bestiary-v510-final/fixes/SettingsModal.tsx" "$PWD/source/src/renderer/src/components/SettingsModal.tsx" -Force
+          Copy-Item "bestiary-build/electron-builder.json" "$PWD/source/electron-builder.json" -Force
 
-          # Explicit generation semantics: generation happens only through the Generate IPC.
           @'
           from pathlib import Path
           p = Path('source/src/main/index.ts')
@@ -108,7 +104,6 @@ jobs:
           python patch_main.py
           if ($LASTEXITCODE -ne 0) { throw "Unable to patch explicit JVM generation" }
 
-          # Pin product identity/version in the reconstructed package.
           Push-Location source
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $pkg.version = "5.1.0"
