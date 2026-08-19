@@ -39,8 +39,6 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force source | Out-Null
 
-          # Reconstruct the last known-good launcher source. src5-03 was superseded
-          # by src5-03a + src5-03b and must not be concatenated with them.
           $sourcePartNames = @(
             "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
           )
@@ -50,21 +48,54 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unable to extract base launcher source archive" }
           if (-not (Test-Path "$PWD/source/package.json")) { throw "Base launcher source reconstruction failed" }
 
-          # Apply the stable 5.x source-side fixes before the 5.1.0 overlay.
           Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
           Copy-Item "bestiary-build/electron-builder.json" "$PWD/source/electron-builder.json" -Force
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
 
-          # 5.1.0 is stored as an overlay on top of the known-good 5.x source.
-          # This avoids the obsolete/corrected full-source chunks coexisting in
-          # bestiary-v510-final/source and corrupting a blind concatenation.
           $overlayPartNames = @("part-00.txt", "part-01.txt", "part-02.txt", "part-03.txt", "part-04.txt")
           $overlayB64 = ($overlayPartNames | ForEach-Object { (Get-Content "bestiary-v510/overlay/$_" -Raw).Trim() }) -join ""
-          [IO.File]::WriteAllBytes("$PWD/v510-overlay.tar.gz", [Convert]::FromBase64String($overlayB64))
-          tar -xzf "$PWD/v510-overlay.tar.gz" -C "$PWD/source"
-          if ($LASTEXITCODE -ne 0) { throw "Unable to apply Bestiary Launcher 5.1.0 overlay" }
+          $env:OVERLAY_B64 = $overlayB64
+          @'
+          import base64, gzip, io, os, pathlib, tarfile, zipfile
+          encoded = os.environ['OVERLAY_B64']
+          packed = base64.b64decode(encoded, validate=True)
+          print('overlay packed bytes:', len(packed), 'magic:', packed[:8].hex())
+          raw = gzip.decompress(packed) if packed[:2] == b'\x1f\x8b' else packed
+          print('overlay unpacked bytes:', len(raw), 'head:', repr(raw[:160]))
+          target = pathlib.Path('source')
+          bio = io.BytesIO(raw)
+          try:
+              with tarfile.open(fileobj=bio, mode='r:*') as tf:
+                  print('overlay format: tar; members:', len(tf.getmembers()))
+                  tf.extractall(target)
+                  raise SystemExit(0)
+          except tarfile.ReadError:
+              pass
+          bio.seek(0)
+          if zipfile.is_zipfile(bio):
+              with zipfile.ZipFile(bio) as zf:
+                  print('overlay format: zip; members:', len(zf.infolist()))
+                  zf.extractall(target)
+                  raise SystemExit(0)
+          try:
+              text = raw.decode('utf-8')
+          except UnicodeDecodeError as exc:
+              raise SystemExit(f'Unknown overlay binary format: {exc}')
+          pathlib.Path('v510-overlay.txt').write_text(text, encoding='utf-8')
+          print('overlay format: utf-8 text; first 500 chars:')
+          print(text[:500])
+          if text.lstrip().startswith('diff --git'):
+              raise SystemExit(20)
+          raise SystemExit('Unknown text overlay format')
+          '@ | Set-Content -Encoding UTF8 unpack_overlay.py
+          python unpack_overlay.py
+          if ($LASTEXITCODE -eq 20) {
+            git apply --directory=source --whitespace=nowarn v510-overlay.txt
+            if ($LASTEXITCODE -ne 0) { throw "Unable to apply git patch overlay" }
+          } elseif ($LASTEXITCODE -ne 0) {
+            throw "Unable to unpack Bestiary Launcher 5.1.0 overlay"
+          }
 
-          # Keep the tested per-user NSIS installer behavior.
           Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
 
           $logoPartNames = @(
@@ -89,21 +120,14 @@ jobs:
           @'
           from PIL import Image
           from pathlib import Path
-
           root = Path("source")
           src = Image.open(root / "resources" / "logo.png").convert("RGBA")
           canvas = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
           src.thumbnail((230, 150), Image.Resampling.LANCZOS)
-          x = (256 - src.width) // 2
-          y = (256 - src.height) // 2
-          canvas.alpha_composite(src, (x, y))
+          canvas.alpha_composite(src, ((256-src.width)//2, (256-src.height)//2))
           (root / "build").mkdir(parents=True, exist_ok=True)
           canvas.save(root / "resources" / "icon.png")
-          canvas.save(
-              root / "build" / "icon.ico",
-              format="ICO",
-              sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)],
-          )
+          canvas.save(root / "build" / "icon.ico", format="ICO", sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)])
           '@ | Set-Content -Encoding UTF8 create_icon.py
           python create_icon.py
 
