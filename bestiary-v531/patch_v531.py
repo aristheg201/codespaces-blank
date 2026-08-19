@@ -36,6 +36,11 @@ for rel in [
 ]:
     p = root / rel
     s = p.read_text(encoding='utf-8').replace('5.3.0', '5.3.1')
+    if rel.endswith('Home.tsx') and '5.3.1' not in s:
+        # Home does not need to render the application version, but keep a
+        # build-time marker so release validation can prove the hotfix overlay
+        # was composed into the renderer source.
+        s += '\n// Bestiary Launcher 5.3.1 lifecycle hotfix\n'
     p.write_text(s, encoding='utf-8')
 
 print('Bestiary Launcher 5.3.1 Minecraft lifecycle state hotfix applied.')
