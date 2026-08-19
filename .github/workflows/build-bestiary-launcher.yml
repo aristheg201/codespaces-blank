@@ -1,4 +1,4 @@
-name: Build Bestiary Launcher 5.2.0
+name: Build Bestiary Launcher 5.2.1
 
 on:
   push:
@@ -30,21 +30,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build, verify Content UX, updater, and runtime-smoke-test Launcher 5.2.0
+      - name: Build, verify mod manager UX, updater, and runtime-smoke-test Launcher 5.2.1
         shell: pwsh
-        run: ./bestiary-v520/build.ps1
+        run: ./bestiary-v521/build.ps1
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.2.0
+          name: BestiaryLauncher-Windows-5.2.1
           path: |
-            build-output-v520/BestiaryLauncher-Setup-5.2.0.exe
-            build-output-v520/BestiaryLauncher-Setup-5.2.0-SHA256.txt
-            build-output-v520/BestiaryLauncher-Portable-5.2.0.zip
-            build-output-v520/BestiaryLauncher-Portable-5.2.0-SHA256.txt
-            build-output-v520/runtime-smoke-stdout.log
-            build-output-v520/runtime-smoke-stderr.log
+            build-output-v521/BestiaryLauncher-Setup-5.2.1.exe
+            build-output-v521/BestiaryLauncher-Setup-5.2.1-SHA256.txt
+            build-output-v521/BestiaryLauncher-Portable-5.2.1.zip
+            build-output-v521/BestiaryLauncher-Portable-5.2.1-SHA256.txt
+            build-output-v521/runtime-smoke-stdout.log
+            build-output-v521/runtime-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
 
@@ -54,9 +54,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'launcher-v5.2.0'
+          $tag = 'launcher-v5.2.1'
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.2.0' --notes 'Bestiary Launcher 5.2.0: primary Content Manager screen and SHA-256 verified application updater.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.2.1' --notes 'Bestiary Launcher 5.2.1: make Mod Manager a prominent Home action while retaining the full Content screen and SHA-256 verified app updater.'
           }
-          gh release upload $tag build-output-v520/BestiaryLauncher-Setup-5.2.0.exe build-output-v520/BestiaryLauncher-Setup-5.2.0-SHA256.txt build-output-v520/BestiaryLauncher-Portable-5.2.0.zip build-output-v520/BestiaryLauncher-Portable-5.2.0-SHA256.txt --clobber
+          gh release upload $tag build-output-v521/BestiaryLauncher-Setup-5.2.1.exe build-output-v521/BestiaryLauncher-Setup-5.2.1-SHA256.txt build-output-v521/BestiaryLauncher-Portable-5.2.1.zip build-output-v521/BestiaryLauncher-Portable-5.2.1-SHA256.txt --clobber
