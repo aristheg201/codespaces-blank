@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Print recoverable runtime files
+      - name: Recover runtime files
         shell: bash
         run: |
           set -euo pipefail
@@ -32,6 +32,7 @@ jobs:
             'src/shared/constants.ts',
             'src/shared/ipc.ts',
           }
+          out=pathlib.Path('runtime-source')
           start=0
           found=set()
           while True:
@@ -48,9 +49,16 @@ jobs:
               data0=h0+512
               if name in targets and data0+size<=len(raw):
                   found.add(name)
-                  print('===',name,'===')
-                  print(raw[data0:data0+size].decode('utf-8','replace'))
+                  target=out/name
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(raw[data0:data0+size])
           missing=targets-found
-          if missing:
-              print('MISSING:', ', '.join(sorted(missing)))
+          if missing: raise SystemExit('Missing: '+', '.join(sorted(missing)))
           PY
+      - name: Upload runtime source
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-runtime-source
+          path: runtime-source
+          if-no-files-found: error
+          retention-days: 1
