@@ -3,7 +3,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoRoot
 
 $source = Get-Content './bestiary-v513/build.ps1' -Raw
-$source = $source.Replace('5.1.3', '5.3.0').Replace('build-output-v513', 'build-output-v530')
+$source = $source.Replace('5.1.3', '5.3.1').Replace('build-output-v513', 'build-output-v531')
 
 $homeCss = "Copy-Item 'bestiary-v510-final/fixes/Home.css' `"`$PWD/source/src/renderer/src/components/Home.css`" -Force"
 if (-not $source.Contains($homeCss)) { throw 'Home.css copy marker missing.' }
@@ -38,13 +38,14 @@ $patches = $builderCopy + "`n" +
   "python 'bestiary-v521/patch_home.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply prominent mod manager entry.' }`n" +
   "python 'bestiary-v530/patch_v530.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply Microsoft auth + skin patch.' }`n" +
   "python 'bestiary-v530/patch_bridge_package.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to switch Skin Bridge to ASAR-safe packaging.' }`n" +
+  "python 'bestiary-v531/patch_v531.py'`nif (`$LASTEXITCODE -ne 0) { throw 'Unable to apply Minecraft lifecycle state hotfix.' }`n" +
   "Copy-Item 'bestiary-skin-bridge/build/libs/bestiary-skin-bridge-1.0.0.jar' `"`$PWD/source/resources/bestiary-skin-bridge-1.0.0.jar`" -Force"
 $source = $source.Replace($builderCopy, $patches)
 
 $generated = Join-Path $PSScriptRoot 'generated-build.ps1'
 Set-Content $generated $source -Encoding UTF8
 & $generated
-if ($LASTEXITCODE -ne 0) { throw "Launcher 5.3.0 generated build failed with code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "Launcher 5.3.1 generated build failed with code $LASTEXITCODE" }
 
 $account = Get-Content 'source/src/main/core/AccountService.ts' -Raw
 $launcher = Get-Content 'source/src/main/core/Launcher.ts' -Raw
@@ -62,9 +63,11 @@ if ($account -notmatch 'minecraft/profile/skins' -or $account -notmatch 'player-
 if ($account -notmatch 'fs\.readFile\(sourceJar\)' -or $account -notmatch 'fs\.writeFile\(tmp, data\)') { throw 'ASAR-safe Skin Bridge extraction missing.' }
 if ($launcher -notmatch 'normalized\.authorization \?\?' -or $launcher -notmatch 'MinecraftAuthorization') { throw 'MCLC Microsoft authorization path missing.' }
 if ($main -notmatch 'authorization: authorization \?\? undefined' -or $main -notmatch 'account-login-microsoft' -or $main -notmatch 'skin-set') { throw 'Account-aware launch or IPC wiring missing.' }
+if ($main -notmatch "event\.type === 'state' && event\.state === 'stopped'" -or $appSource -notmatch "event\.stage === 'idle'") { throw 'Minecraft exit lifecycle UI refresh hotfix missing.' }
 if ($main -notmatch "app\.getAppPath\(\), 'resources', 'bestiary-skin-bridge-1\.0\.0\.jar'") { throw 'ASAR Skin Bridge runtime path missing.' }
 if ($remote -notmatch 'microsoftClientId' -or $ipc -notmatch "type: 'msa'") { throw 'Public client id/MSA authorization metadata missing.' }
 if ($appSource -notmatch "screen === 'account'" -or $accountUi -notmatch 'ĐĂNG NHẬP MICROSOFT' -or $accountUi -notmatch 'PLAYER SKIN') { throw 'Account/Skin UI missing.' }
+if ($appSource -notmatch "currentVersion: '5\.3\.1'" -or $homeSource -notmatch '5\.3\.1') { throw 'Launcher 5.3.1 version metadata missing.' }
 if ($homeSource -notmatch 'Tài khoản & Skin' -or $homeSource -notmatch 'microsoftActive') { throw 'Home account entry or Microsoft-aware Play UI missing.' }
 if ($bridgeJar.Length -lt 10000) { throw "Skin Bridge jar unexpectedly small: $($bridgeJar.Length)" }
 if ($builderConfig -notmatch 'resources/\*\*/\*') { throw 'electron-builder no longer packages resources directory.' }
@@ -78,9 +81,9 @@ Pop-Location
 if ($asarExit -ne 0) { throw 'Unable to inspect packaged app.asar.' }
 if (($asarEntries -join "`n") -notmatch 'resources[\\/]bestiary-skin-bridge-1\.0\.0\.jar') { throw 'Packaged app.asar does not contain Bestiary Skin Bridge.' }
 
-New-Item -ItemType Directory -Force 'build-output-v530' | Out-Null
-Copy-Item $bridgeJar.FullName 'build-output-v530/bestiary-skin-bridge-1.0.0.jar' -Force
+New-Item -ItemType Directory -Force 'build-output-v531' | Out-Null
+Copy-Item $bridgeJar.FullName 'build-output-v531/bestiary-skin-bridge-1.0.0.jar' -Force
 $bridgeHash = (Get-FileHash $bridgeJar.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-"$bridgeHash  bestiary-skin-bridge-1.0.0.jar" | Set-Content 'build-output-v530/bestiary-skin-bridge-1.0.0-SHA256.txt' -Encoding ascii
+"$bridgeHash  bestiary-skin-bridge-1.0.0.jar" | Set-Content 'build-output-v531/bestiary-skin-bridge-1.0.0-SHA256.txt' -Encoding ascii
 Write-Host "Skin Bridge SHA256: $bridgeHash"
-Write-Host 'Launcher 5.3.0 Microsoft account and player-skin contracts verified.'
+Write-Host 'Launcher 5.3.1 Microsoft account, player-skin, and Minecraft lifecycle contracts verified.'
