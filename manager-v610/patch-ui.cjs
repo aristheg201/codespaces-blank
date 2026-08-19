@@ -1,0 +1,16 @@
+const fs=require('node:fs');
+const p='manager/src/renderer/src/App.tsx';
+let s=fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n');
+s=s.replace("import type { ClientProfileId, DistributionSettings, ImportStatus, ManagedFile, PackageImportItem, StagedChange } from '../../shared/types';", "import type { AppUpdateState, ClientProfileId, DistributionSettings, ImportStatus, ManagedFile, PackageImportItem, StagedChange } from '../../shared/types';");
+s=s.replace('Release Console 6.0.6','Release Console 6.1.0');
+const appMarker='export function App(){ const {load,snapshot,view,error,clearError,progress}=useManager(); useEffect(()=>{void load();const off=window.bestiary.onProgress(useManager.getState().setProgress);return off;},[]);';
+if(!s.includes(appMarker)) throw new Error('Manager App function marker missing');
+const appStart=`export function App(){ const {load,snapshot,view,error,clearError,progress}=useManager(); const [appUpdate,setAppUpdate]=useState<AppUpdateState>({currentVersion:'6.1.0',latestVersion:null,status:'idle',progress:0,message:'Chưa kiểm tra cập nhật.'}); useEffect(()=>{void load();const off=window.bestiary.onProgress(useManager.getState().setProgress);const offUpdate=window.bestiary.onAppUpdate(setAppUpdate);void window.bestiary.getAppUpdate().then(setAppUpdate);const timer=window.setTimeout(()=>{void window.bestiary.checkAppUpdate().then(setAppUpdate);},1800);return()=>{off();offUpdate();window.clearTimeout(timer);};},[]);`;
+s=s.replace(appMarker,appStart);
+s=s.replace('<><Empty/>','<><Empty/><ManagerUpdate state={appUpdate}/>');
+s=s.replace('<Sidebar/><main','<Sidebar/><ManagerUpdate state={appUpdate}/><main');
+const insert=`\nfunction ManagerUpdate({state}:{state:AppUpdateState}){\n if(state.status==='idle'||state.status==='up_to_date')return null;\n const ready=state.status==='ready';\n return <aside className=\"fixed bottom-5 left-[290px] right-5 z-[90] grid grid-cols-[1fr_220px_auto] items-center gap-4 rounded-2xl border border-red-500/25 bg-[#101014]/95 p-4 shadow-2xl backdrop-blur-xl\"><div><div className=\"text-[9px] font-black tracking-[.15em] text-red-400\">{ready?\`MANAGER \\${state.latestVersion} SẴN SÀNG\`:state.status==='downloading'?\`ĐANG TẢI \\${state.latestVersion||''}\`:state.status==='error'?'LỖI AUTO UPDATE':'APP UPDATE'}</div><div className=\"mt-1 text-xs text-zinc-300\">{state.message}</div></div>{(state.status==='downloading'||state.status==='available')?<div className=\"h-2 overflow-hidden rounded-full bg-zinc-800\"><i className=\"block h-full rounded-full bg-red-500\" style={{width:\`\\${state.progress}%\`}}/></div>:<div/>}<button onClick={()=>void(ready?window.bestiary.installAppUpdate():window.bestiary.checkAppUpdate())} className=\"rounded-xl bg-red-500 px-5 py-3 text-[9px] font-black text-white\">{ready?'CẬP NHẬT & KHỞI ĐỘNG LẠI':state.status==='error'?'THỬ LẠI':'KIỂM TRA'}</button></aside>;\n}\n`;
+const exportPos=s.indexOf('export function App(){');
+s=s.slice(0,exportPos)+insert+s.slice(exportPos);
+fs.writeFileSync(p,s);
+console.log('Manager 6.1.0 updater UI patched.');
