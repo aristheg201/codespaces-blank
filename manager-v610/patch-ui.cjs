@@ -8,27 +8,17 @@ s=s.replace(/import type \{([^}]+)\} from '\.\.\/\.\.\/shared\/types';/, (m,insi
 });
 s=s.replace('Release Console v6','Release Console 6.1.0').replace('Release Console 6.0.6','Release Console 6.1.0');
 
-const appRe=/function App\(\) \{\n  const \{ load, snapshot, view, error, clearError, setProgress \} = useManager\(\);\n  useEffect\(\(\) => \{ const off = window\.bestiary\.onProgress\(setProgress\); void load\(\); return off; \}, \[load, setProgress\]\);/;
-if(!appRe.test(s)) throw new Error('Manager App function marker missing after v606 export patch');
-const replacement=[
-"function App() {",
-"  const { load, snapshot, view, error, clearError, setProgress } = useManager();",
-"  const [appUpdate,setAppUpdate]=useState<AppUpdateState>({currentVersion:'6.1.0',latestVersion:null,status:'idle',progress:0,message:'Chưa kiểm tra cập nhật.'});",
-"  useEffect(() => {",
-"    const off = window.bestiary.onProgress(setProgress);",
-"    const offUpdate = window.bestiary.onAppUpdate(setAppUpdate);",
-"    let active=true;",
-"    void load();",
-"    void window.bestiary.getAppUpdate().then(state=>{ if(active) setAppUpdate(state); });",
-"    const timer=window.setTimeout(()=>{ void window.bestiary.checkAppUpdate().then(state=>{ if(active) setAppUpdate(state); }); },1800);",
-"    return()=>{active=false;off();offUpdate();window.clearTimeout(timer);};",
-"  }, [load, setProgress]);"
-].join('\n');
-s=s.replace(appRe,replacement);
-
 const insert=[
 "",
-"function ManagerUpdate({state}:{state:AppUpdateState}){",
+"function ManagerUpdate(){",
+"  const [state,setState]=useState<AppUpdateState>({currentVersion:'6.1.0',latestVersion:null,status:'idle',progress:0,message:'Chưa kiểm tra cập nhật.'});",
+"  useEffect(()=>{",
+"    let active=true;",
+"    const off=window.bestiary.onAppUpdate(next=>{if(active)setState(next);});",
+"    void window.bestiary.getAppUpdate().then(next=>{if(active)setState(next);});",
+"    const timer=window.setTimeout(()=>{void window.bestiary.checkAppUpdate().then(next=>{if(active)setState(next);});},1800);",
+"    return()=>{active=false;off();window.clearTimeout(timer);};",
+"  },[]);",
 "  if(state.status==='idle'||state.status==='up_to_date') return null;",
 "  const ready=state.status==='ready';",
 "  const downloading=state.status==='downloading'||state.status==='available'||state.status==='checking';",
@@ -42,13 +32,13 @@ const insert=[
 ""
 ].join('\n');
 const appPos=s.indexOf('function App()');
-if(appPos<0) throw new Error('Manager App position missing');
+if(appPos<0) throw new Error('Manager App position missing after v606 export patch');
 s=s.slice(0,appPos)+insert+s.slice(appPos);
 
-const progressMarker='    <ProgressOverlay />';
-if(!s.includes(progressMarker)) throw new Error('ProgressOverlay render marker missing');
-s=s.replace(progressMarker,'    <ProgressOverlay />\n    <ManagerUpdate state={appUpdate} />');
+const progressRe=/(<ProgressOverlay\s*\/>)/;
+if(!progressRe.test(s)) throw new Error('ProgressOverlay render marker missing');
+s=s.replace(progressRe,'$1\n    <ManagerUpdate />');
 if(!s.includes('export default App;')) throw new Error('Manager default export lost');
 
 fs.writeFileSync(p,s);
-console.log('Manager 6.1.0 updater UI patched after v606 export transform.');
+console.log('Manager 6.1.0 independent updater component patched.');
