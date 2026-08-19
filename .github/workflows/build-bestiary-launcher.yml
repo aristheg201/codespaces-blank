@@ -40,7 +40,7 @@ jobs:
           New-Item -ItemType Directory -Force source | Out-Null
 
           $parts = Get-ChildItem "bestiary-v510-final/source/part-*.txt" | Sort-Object Name
-          if ($parts.Count -ne 6) { throw "Expected 6 launcher source chunks, found $($parts.Count)" }
+          if ($parts.Count -ne 9) { throw "Expected 9 launcher source chunks, found $($parts.Count)" }
           $sourceB64 = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ""
           [IO.File]::WriteAllBytes("$PWD/launcher-code-5.1.0.tar.gz", [Convert]::FromBase64String($sourceB64))
           tar -xzf "$PWD/launcher-code-5.1.0.tar.gz" -C "$PWD/source"
