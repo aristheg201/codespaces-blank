@@ -1,11 +1,9 @@
-name: Debug Launcher 5.1.0 Source
+name: Debug Launcher 5.1.0 Runtime Source
 
 on:
   workflow_dispatch:
   push:
     branches: [bestiary-launcher-v5-1-0]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -15,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Print recoverable 5.1.0 core files
+      - name: Print recoverable runtime files
         shell: bash
         run: |
           set -euo pipefail
@@ -25,8 +23,17 @@ jobs:
           names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
           text=''.join((root/n).read_text().strip() for n in names); text += '='*((4-len(text)%4)%4)
           d=zlib.decompressobj(16+zlib.MAX_WBITS); raw=d.decompress(base64.b64decode(text))
-          targets={'src/main/core/JvmProfileGenerator.ts','src/main/core/ContentManager.ts','src/main/core/RemoteService.ts','src/renderer/src/components/LibraryModal.tsx','src/shared/ipc.ts'}
+          targets={
+            'src/main/index.ts',
+            'src/main/core/RemoteService.ts',
+            'src/main/core/Launcher.ts',
+            'src/main/core/SettingsStore.ts',
+            'src/main/core/SyncEngine.ts',
+            'src/shared/constants.ts',
+            'src/shared/ipc.ts',
+          }
           start=0
+          found=set()
           while True:
               p=raw.find(b'ustar',start)
               if p<0: break
@@ -40,6 +47,10 @@ jobs:
               except: continue
               data0=h0+512
               if name in targets and data0+size<=len(raw):
+                  found.add(name)
                   print('===',name,'===')
                   print(raw[data0:data0+size].decode('utf-8','replace'))
+          missing=targets-found
+          if missing:
+              print('MISSING:', ', '.join(sorted(missing)))
           PY
