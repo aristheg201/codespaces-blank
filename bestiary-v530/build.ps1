@@ -52,7 +52,7 @@ $remote = Get-Content 'source/src/main/core/RemoteService.ts' -Raw
 $main = Get-Content 'source/src/main/index.ts' -Raw
 $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 $accountUi = Get-Content 'source/src/renderer/src/components/AccountScreen.tsx' -Raw
-$home = Get-Content 'source/src/renderer/src/components/Home.tsx' -Raw
+$homeSource = Get-Content 'source/src/renderer/src/components/Home.tsx' -Raw
 $ipc = Get-Content 'source/src/shared/ipc.ts' -Raw
 $builderConfig = Get-Content 'source/electron-builder.json' -Raw
 $bridgeJar = Get-Item 'bestiary-skin-bridge/build/libs/bestiary-skin-bridge-1.0.0.jar' -ErrorAction Stop
@@ -65,7 +65,7 @@ if ($main -notmatch 'authorization: authorization \?\? undefined' -or $main -not
 if ($main -notmatch "app\.getAppPath\(\), 'resources', 'bestiary-skin-bridge-1\.0\.0\.jar'") { throw 'ASAR Skin Bridge runtime path missing.' }
 if ($remote -notmatch 'microsoftClientId' -or $ipc -notmatch "type: 'msa'") { throw 'Public client id/MSA authorization metadata missing.' }
 if ($appSource -notmatch "screen === 'account'" -or $accountUi -notmatch 'ĐĂNG NHẬP MICROSOFT' -or $accountUi -notmatch 'PLAYER SKIN') { throw 'Account/Skin UI missing.' }
-if ($home -notmatch 'Tài khoản & Skin' -or $home -notmatch 'microsoftActive') { throw 'Home account entry or Microsoft-aware Play UI missing.' }
+if ($homeSource -notmatch 'Tài khoản & Skin' -or $homeSource -notmatch 'microsoftActive') { throw 'Home account entry or Microsoft-aware Play UI missing.' }
 if ($bridgeJar.Length -lt 10000) { throw "Skin Bridge jar unexpectedly small: $($bridgeJar.Length)" }
 if ($builderConfig -notmatch 'resources/\*\*/\*') { throw 'electron-builder no longer packages resources directory.' }
 if (-not (Test-Path 'source/resources/bestiary-skin-bridge-1.0.0.jar')) { throw 'Launcher source resources are missing Skin Bridge jar.' }
