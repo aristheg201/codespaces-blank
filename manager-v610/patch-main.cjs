@@ -1,0 +1,13 @@
+const fs=require('node:fs');
+const p='manager/src/main/index.ts';
+let s=fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n');
+s=s.replace("import { GithubDistributionService } from './services/GithubDistributionService';", "import { GithubDistributionService } from './services/GithubDistributionService';\nimport { AppUpdater } from './services/AppUpdater';");
+s=s.replace('let distributionService: GithubDistributionService;', 'let distributionService: GithubDistributionService;\nlet appUpdater: AppUpdater;');
+const marker="  ipcMain.handle('release:promote', (_event, version: string) => distributionService.promoteStable(version));";
+if(!s.includes(marker)) throw new Error('release:promote marker missing');
+s=s.replace(marker,marker+"\n  ipcMain.handle('app-update:get', () => appUpdater.snapshot());\n  ipcMain.handle('app-update:check', () => appUpdater.checkAndDownload());\n  ipcMain.handle('app-update:install', () => appUpdater.installReady());");
+const init="  distributionService = new GithubDistributionService(app.getPath('userData'), settings.distribution, sendProgress);";
+if(!s.includes(init)) throw new Error('distribution init marker missing');
+s=s.replace(init,init+"\n  appUpdater = new AppUpdater(app.getPath('userData'), (state) => {\n    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('manager:app-update', state);\n  });");
+fs.writeFileSync(p,s);
+console.log('Manager 6.1.0 updater IPC patched.');
