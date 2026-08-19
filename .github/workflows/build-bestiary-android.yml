@@ -1,23 +1,25 @@
-name: Build Bestiary Launcher Android 1.0.0
+name: Build Bestiary Android APKs 1.0.0
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
-  workflow_dispatch:
+  issues:
+    types: [opened]
 
 permissions:
   contents: read
 
 jobs:
-  build-android:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'bestiary-android-')
+  launcher:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || startsWith(github.event.issue.title, '[build-android]')
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       AMETHYST_COMMIT: 360d708262ff703d9b52782d20cd348410a33df5
       ANDROID_NDK_VERSION: 27.3.13750724
     steps:
-      - name: Checkout Bestiary Android build definitions
+      - name: Checkout Bestiary Android sources
         uses: actions/checkout@v4
         with:
           ref: bestiary-android-launcher-v1
@@ -51,14 +53,16 @@ jobs:
           test "$(git -C amethyst rev-parse HEAD)" = "$AMETHYST_COMMIT"
           git -C amethyst submodule update --init --recursive --depth 1
 
-      - name: Apply Bestiary Android patches
+      - name: Apply Bestiary launcher patches
         shell: bash
         run: |
           set -euo pipefail
           python android-build/patch_bestiary_android.py
           python android-build/patch_android_compat.py
+          python android-build/patch_runtime_metadata.py
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' amethyst/app_pojavlauncher/build.gradle
-          grep -q '1.21.1/0.18.4/profile/json' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
+          grep -q 'defaultFabricLoader' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
+          grep -q -- '--quickPlayMultiplayer' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
           grep -q 'opengles_mobileglues' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
 
       - name: Generate language list
@@ -69,7 +73,7 @@ jobs:
           chmod +x scripts/languagelist_updater.sh
           bash scripts/languagelist_updater.sh
 
-      - name: Build debug APK
+      - name: Build Launcher APK
         working-directory: amethyst
         shell: bash
         run: |
@@ -77,23 +81,84 @@ jobs:
           chmod +x gradlew
           ./gradlew :jre_lwjgl3glfw:build :app_pojavlauncher:assembleDebug --stacktrace --no-daemon
 
-      - name: Stage APK and SHA-256
+      - name: Stage Launcher APK
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build-output
+          mkdir -p launcher-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.0-debug.apk
-          sha256sum build-output/BestiaryLauncher-Android-1.0.0-debug.apk > build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
-          ls -lh build-output/BestiaryLauncher-Android-1.0.0-debug.apk
+          cp "$APK" launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk
+          sha256sum launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk > launcher-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
+          test "$(stat -c%s launcher-output/BestiaryLauncher-Android-1.0.0-debug.apk)" -gt 10000000
 
-      - name: Upload APK
+      - name: Upload Launcher APK
         uses: actions/upload-artifact@v4
         with:
           name: BestiaryLauncher-Android-1.0.0-debug
-          path: |
-            build-output/BestiaryLauncher-Android-1.0.0-debug.apk
-            build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
+          path: launcher-output/*
+          if-no-files-found: error
+          retention-days: 7
+
+  manager:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || startsWith(github.event.issue.title, '[build-android]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Bestiary Android sources
+        uses: actions/checkout@v4
+        with:
+          ref: bestiary-android-launcher-v1
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Ensure Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Verify Manager security and runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'AndroidKeyStore' android-manager/app/src/main/java/vn/svframe/bestiary/manager/SecureTokenStore.java
+          grep -q 'loaderVersion' android-manager/app/src/main/java/vn/svframe/bestiary/manager/GithubDistributionService.java
+          grep -q 'javaMajor' android-manager/app/src/main/java/vn/svframe/bestiary/manager/GithubDistributionService.java
+          grep -q 'ACTION_OPEN_DOCUMENT_TREE' android-manager/app/src/main/java/vn/svframe/bestiary/manager/MainActivity.java
+          ! grep -R -E 'ghp_[A-Za-z0-9]|github_pat_' android-manager
+
+      - name: Build Manager APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p android-manager :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Stage Manager APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p manager-output
+          APK="$(find android-manager/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" manager-output/BestiaryManager-Android-1.0.0-debug.apk
+          sha256sum manager-output/BestiaryManager-Android-1.0.0-debug.apk > manager-output/BestiaryManager-Android-1.0.0-debug-SHA256.txt
+          test "$(stat -c%s manager-output/BestiaryManager-Android-1.0.0-debug.apk)" -gt 50000
+
+      - name: Upload Manager APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryManager-Android-1.0.0-debug
+          path: manager-output/*
           if-no-files-found: error
           retention-days: 7
