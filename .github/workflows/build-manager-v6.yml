@@ -52,11 +52,21 @@ jobs:
 
           @'
           from pathlib import Path
-          import base64, gzip
-          encoded = Path('manager-v605/App.tsx.gz.b64').read_text(encoding='utf-8').strip()
-          Path('manager/src/renderer/src/App.tsx').write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          import base64, gzip, hashlib
+          chunks = sorted(Path('manager-v605/chunks').glob('*.txt'))
+          if len(chunks) != 5:
+              raise SystemExit(f'Expected 5 Manager UX source chunks, found {len(chunks)}')
+          encoded = ''.join(path.read_text(encoding='utf-8').strip() for path in chunks)
+          digest = hashlib.sha256(encoded.encode()).hexdigest()
+          expected = '4d0aab9b48adad6e70afc199327ffa3f642cd70c20311909d303953167880e9c'
+          if digest != expected:
+              raise SystemExit(f'Manager UX source checksum mismatch: {digest}')
+          data = gzip.decompress(base64.b64decode(encoded))
+          Path('manager/src/renderer/src/App.tsx').write_bytes(data)
+          print('Manager UX source restored:', len(data), 'bytes')
           '@ | Set-Content -Encoding UTF8 decode_manager_v605.py
           python decode_manager_v605.py
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to restore Manager 6.0.5 renderer source.' }
 
           $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
           $pkg.version = '6.0.5'
