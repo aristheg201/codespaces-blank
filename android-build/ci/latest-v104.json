@@ -1,0 +1,11 @@
+{
+  "version": "1.0.4",
+  "variant": "updater-compatible",
+  "sha256": "528a330e84b1d0419a4f996692d87c6032aa4190e14542afe5cae40801241f97",
+  "artifactRunId": 32373233037,
+  "branch": "bestiary-android-v1-0-4-performance-updater",
+  "publishRunId": 32376476427,
+  "releaseTag": "android-v1.0.4",
+  "releasePublished": true,
+  "verified": true
+}
