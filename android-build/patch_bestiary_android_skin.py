@@ -188,7 +188,7 @@ req(insert in b, 'bootstrap loadRuntimeMetadata marker missing')
 b = b.replace(insert, helper + insert, 1)
 bootstrap.write_text(b, encoding='utf-8')
 
-# Add Account & Skin to portrait home.
+# Add Account & Skin to portrait home. XML must escape '&'.
 layout = RES / 'layout/fragment_launcher.xml'
 x = layout.read_text(encoding='utf-8')
 needle = '''            <com.kdt.mcgui.LauncherMenuButton
@@ -202,7 +202,7 @@ skin_button = needle + '''            <com.kdt.mcgui.LauncherMenuButton
                 android:id="@+id/skin_button"
                 style="@style/LauncherMenuButton.Universal"
                 android:layout_width="match_parent"
-                android:text="TÀI KHOẢN & SKIN" />
+                android:text="TÀI KHOẢN &amp; SKIN" />
 '''
 x = x.replace(needle, skin_button, 1)
 layout.write_text(x, encoding='utf-8')
@@ -221,5 +221,5 @@ FRAG.write_text(f, encoding='utf-8')
 
 req('bestiarySkinPicker' in launcher.read_text(encoding='utf-8'), 'skin picker hook missing')
 req('installBundledSkinBridge(activity)' in bootstrap.read_text(encoding='utf-8'), 'bundled Skin Bridge hook missing')
-req('TÀI KHOẢN & SKIN' in layout.read_text(encoding='utf-8'), 'skin UI missing')
+req('TÀI KHOẢN &amp; SKIN' in layout.read_text(encoding='utf-8'), 'skin UI missing')
 print('Bestiary Android local skin + bundled Skin Bridge patch applied')
