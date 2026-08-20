@@ -1,4 +1,4 @@
-run=32343004424
+run=32343004508
 commit=e1cd00ab10b81d7c8fd0591f4cc516b1b5970082
 branch=bestiary-launcher-v5-3-6-lifecycle
 
@@ -16,8 +16,8 @@ Runtime and renderer contracts verified.
 npm warn skipping integrity check for git dependency ssh://git@github.com/electron/node-gyp.git
 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
 npm warn deprecated @npmcli/move-file@2.0.1: This functionality has been moved to @npmcli/fs
-npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
 npm warn deprecated har-validator@5.1.5: this library is no longer supported
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
 npm warn deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 npm warn deprecated glob@8.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
@@ -29,7 +29,7 @@ npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contai
 npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-added 539 packages in 39s
+added 539 packages in 42s
 
 up to date in 1s
 
@@ -62,7 +62,7 @@ computing gzip size...
 [2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
 [2m../../dist-renderer/[22m[35massets/index-DLX1QvGB.css  [39m[1m[2m 46.44 kB[22m[1m[22m[2m │ gzip: 10.80 kB[22m
 [2m../../dist-renderer/[22m[36massets/index-DCwqXNW6.js   [39m[1m[2m223.55 kB[22m[1m[22m[2m │ gzip: 69.85 kB[22m
-[32m✓ built in 1.88s[39m
+[32m✓ built in 1.94s[39m
 
 > bestiary-launcher@5.3.2 build:main
 > tsc -p tsconfig.main.json
@@ -75,24 +75,24 @@ computing gzip size...
   • completed installing native dependencies
   • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
   • downloading     url=https://github.com/electron/electron/releases/download/v37.2.6/electron-v37.2.6-win32-x64.zip size=124 MB parts=8
-  • downloaded      url=https://github.com/electron/electron/releases/download/v37.2.6/electron-v37.2.6-win32-x64.zip duration=337ms
+  • downloaded      url=https://github.com/electron/electron/releases/download/v37.2.6/electron-v37.2.6-win32-x64.zip duration=1.301s
   • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
   • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
-  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=130ms
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=346ms
   • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
   • building        target=nsis file=release\BestiaryLauncher-Setup-5.3.2.exe archs=x64 oneClick=false perMachine=false
   • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z size=1.3 MB parts=1
-  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z duration=90ms
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z duration=128ms
   • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
   • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z size=731 kB parts=1
-  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z duration=114ms
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z duration=130ms
   • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
   • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.3.2.exe
   • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.3.2.exe.blockmap
 === Runtime smoke test ===
-Launcher stayed alive for runtime smoke test. PID=6888
-Installer SHA256: 22950323615a174510e06606d52c51deb49346dc347b009070eaa4c6059f30e2
-Portable SHA256:  194e61e2cbc4feb0f945b5c61840b3caa6c48ed39bc8ca3ad3243520ef02a9dc
+Launcher stayed alive for runtime smoke test. PID=6620
+Installer SHA256: fd12519f3f9c018c30b066a7c72eada3684f783df808142d748aa95e6aedba8f
+Portable SHA256:  2602bb6d03c41326bce1c09d458f8402316b9738820f851ea137d072553557c6
 Bestiary Launcher 5.3.2 runtime-verified build completed.
 Skin Bridge SHA256: 82b715371f14b147f88c47cf38fe3264020be7cde5df0b106cb410168aa2235d
 Launcher 5.3.2 Microsoft account, player-skin, and Minecraft lifecycle contracts verified.
@@ -126,7 +126,7 @@ computing gzip size...
 [2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
 [2m../../dist-renderer/[22m[35massets/index-DLX1QvGB.css  [39m[1m[2m 46.44 kB[22m[1m[22m[2m │ gzip: 10.80 kB[22m
 [2m../../dist-renderer/[22m[36massets/index-DjsWYOzp.js   [39m[1m[2m223.67 kB[22m[1m[22m[2m │ gzip: 69.91 kB[22m
-[32m✓ built in 1.82s[39m
+[32m✓ built in 1.87s[39m
 
 > bestiary-launcher@5.3.3 build:main
 > tsc -p tsconfig.main.json
@@ -147,9 +147,9 @@ computing gzip size...
   • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.3.3.exe.blockmap
 Launcher 5.3.3 local/offline identity isolation and terminology contracts verified.
 === Runtime smoke test 5.3.3 ===
-Launcher 5.3.3 stayed alive for runtime smoke test. PID=8220
-Installer SHA256: 75eaf066e00ae7fdf4d0a0b6121a072334f5006da67e67b634c9ee92f45f8129
-Portable SHA256:  a862485497ac1a22c91364ad2d78b5e2573dfb86b142bd63fcb2282101ad76eb
+Launcher 5.3.3 stayed alive for runtime smoke test. PID=7308
+Installer SHA256: 4d75961ec433aecd81d7ff39179535a503065cd96d83bcb0d9e33ffd5820c5a8
+Portable SHA256:  a7b0de621bff2a00ff60ed82b5557d8884e3d74177fd84d225428fe30d5c6224
 Skin Bridge SHA256: 82b715371f14b147f88c47cf38fe3264020be7cde5df0b106cb410168aa2235d
 Bestiary Launcher 5.3.3 runtime-verified build completed.
 === Apply 5.3.4 backend official-launcher bridge ===
@@ -185,7 +185,7 @@ computing gzip size...
 [2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
 [2m../../dist-renderer/[22m[35massets/index-DLX1QvGB.css  [39m[1m[2m 46.44 kB[22m[1m[22m[2m │ gzip: 10.80 kB[22m
 [2m../../dist-renderer/[22m[36massets/index-BvdeMwn-.js   [39m[1m[2m223.67 kB[22m[1m[22m[2m │ gzip: 69.92 kB[22m
-[32m✓ built in 1.76s[39m
+[32m✓ built in 1.87s[39m
 
 > bestiary-launcher@5.3.5 build:main
 > tsc -p tsconfig.main.json
@@ -206,9 +206,9 @@ computing gzip size...
   • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.3.5.exe.blockmap
 Launcher 5.3.5 flow and 5.3.3 UI contracts verified.
 === Runtime smoke test 5.3.5 ===
-Launcher 5.3.5 stayed alive for runtime smoke test. PID=5972
-Installer SHA256: c2207316cf33083dd3fb4f5cd2a51a76450f6aa60276d5132ed7d657e4ce23b9
-Portable SHA256:  65579aed657f03f6728007ff0ef854c1f0c9c358cdf84df164d764598b86f5e6
+Launcher 5.3.5 stayed alive for runtime smoke test. PID=5584
+Installer SHA256: 3213a3158ab2351662cce3c602b664ac71db78ae1ac701184db888fd9dd7eb59
+Portable SHA256:  eb4cd7574c05fad791f68b158b801cb6abf431aef74a7125a21e34fd9ef71725
 Skin Bridge SHA256: 82b715371f14b147f88c47cf38fe3264020be7cde5df0b106cb410168aa2235d
 Bestiary Launcher 5.3.5 runtime-verified Microsoft identity / official-launcher build completed.
 === Apply 5.3.6 lifecycle hotfix ===
@@ -241,7 +241,7 @@ computing gzip size...
 [2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
 [2m../../dist-renderer/[22m[35massets/index-DLX1QvGB.css  [39m[1m[2m 46.44 kB[22m[1m[22m[2m │ gzip: 10.80 kB[22m
 [2m../../dist-renderer/[22m[36massets/index-Cy7kjkdQ.js   [39m[1m[2m223.67 kB[22m[1m[22m[2m │ gzip: 69.92 kB[22m
-[32m✓ built in 1.85s[39m
+[32m✓ built in 2.11s[39m
 
 > bestiary-launcher@5.3.6 build:main
 > tsc -p tsconfig.main.json
