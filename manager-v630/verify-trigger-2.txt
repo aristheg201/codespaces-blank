@@ -1,0 +1,1 @@
+verify Manager 6.3.0 after staged JAR target fix
