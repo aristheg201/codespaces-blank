@@ -58,6 +58,7 @@ jobs:
           python android-build/prepare_bestiary_logo_chunks.py
           python android-build/patch_bestiary_android_v100.py
           python android-build/patch_bestiary_android_v100_fix.py
+          python android-build/patch_android_local_skin.py
 
       - name: Verify Bestiary Android contracts
         shell: bash
@@ -67,6 +68,7 @@ jobs:
           BOOT="$APP/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java"
           LAUNCHER="$APP/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java"
           MENU="$APP/src/main/java/net/kdt/pojavlaunch/fragments/MainMenuFragment.java"
+          SKIN="$APP/src/main/java/net/kdt/pojavlaunch/BestiarySkinManager.java"
           MANIFEST="$APP/src/main/AndroidManifest.xml"
           LAYOUT="$APP/src/main/res/layout/fragment_launcher.xml"
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
@@ -78,6 +80,10 @@ jobs:
           grep -q 'BestiaryAppUpdater.check(this)' "$LAUNCHER"
           grep -q 'android:screenOrientation="portrait"' "$MANIFEST"
           grep -q 'CHƠI NGAY' "$LAYOUT"
+          grep -q 'TÀI KHOẢN &amp; SKIN' "$LAYOUT"
+          grep -q 'player-skin.json' "$SKIN"
+          grep -q 'player-skin.png' "$SKIN"
+          grep -q 'BestiarySkinManager.handleResult' "$MENU"
           ! grep -q 'deleteSodiumMods' "$MENU"
           test -s "$APP/src/main/res/drawable-nodpi/bestiary_logo.png"
           file "$APP/src/main/res/drawable-nodpi/bestiary_logo.png" | grep -q 'PNG image data'
