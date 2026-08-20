@@ -1,0 +1,53 @@
+name: Republish verified Bestiary Launcher 5.3.7 r1
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-3-7-lifecycle-keybind]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified 5.3.7 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download 32353892508 --repo "$GITHUB_REPOSITORY" -n BestiaryLauncher-Windows-5.3.7 -D publish
+          test -s publish/BestiaryLauncher-Setup-5.3.7.exe
+          ACTUAL="$(sha256sum publish/BestiaryLauncher-Setup-5.3.7.exe | awk '{print $1}')"
+          test "$ACTUAL" = '7b4f8c36889620a6406558f33e942fe69052d3fbf8015db9533f52e7c4ce053e'
+      - name: Publish immutable r1 release URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG='launcher-v5.3.7-r1'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher 5.3.7 r1' --notes 'Republish exact CI-verified 5.3.7 installer under a fresh release URL to eliminate stale/replaced asset bytes. App version remains 5.3.7.'
+          fi
+          gh release upload "$TAG" publish/BestiaryLauncher-Setup-5.3.7.exe publish/BestiaryLauncher-Setup-5.3.7-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record r1 release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"version":"5.3.7","sha256":"7b4f8c36889620a6406558f33e942fe69052d3fbf8015db9533f52e7c4ce053e","releaseTag":"launcher-v5.3.7-r1","releasePublished":true,"verified":true}' > /tmp/release.json
+          CONTENT="$(base64 -w0 /tmp/release.json)"
+          P='bestiary-v537/release-v537-r1.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json,sys,os
+          p={'message':'Record published Launcher 5.3.7 r1 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
