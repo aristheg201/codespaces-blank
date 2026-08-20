@@ -35,3 +35,19 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher 5.3.7' --notes 'Launcher 5.3.7: lifecycle/process-tree fix, single-instance restore, desktop scrollbar và keybind policy DEFAULT/LOCKED.'
           fi
           gh release upload "$TAG" publish/BestiaryLauncher-Setup-5.3.7.exe publish/BestiaryLauncher-Setup-5.3.7-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"version":"5.3.7","sha256":"7b4f8c36889620a6406558f33e942fe69052d3fbf8015db9533f52e7c4ce053e","releaseTag":"launcher-v5.3.7","releasePublished":true,"verified":true}' > /tmp/release.json
+          CONTENT="$(base64 -w0 /tmp/release.json)"
+          P='bestiary-v537/release-v537.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json,sys,os
+          p={'message':'Record published Launcher 5.3.7 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
