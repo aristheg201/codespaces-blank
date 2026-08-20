@@ -1,0 +1,229 @@
+name: Build Bestiary Pack Manager 6.3.0 Windows
+
+on:
+  push:
+    branches: [bestiary-manager-v6-3-0-mod-audit]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 70
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Reconstruct Manager 6.3.0 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts = Get-ChildItem bpm6-src/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
+
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+          node patch-v603.cjs
+          node patch-v604.cjs
+
+          Copy-Item manager-v606/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v606/App.tsx manager/src/renderer/src/App.tsx -Force
+          Copy-Item manager-v606/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v610/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v610/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v610/AppUpdater.ts manager/src/main/services/AppUpdater.ts -Force
+          node patch-v605.cjs
+          node patch-v606.cjs
+          node manager-v606/patch-main.cjs
+          node manager-v610/patch-main.cjs
+          node manager-v610/patch-ui.cjs
+          node manager-v620/patch-v620.cjs
+
+          Copy-Item manager-v630/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v630/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v630/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v630/ModAuditService.ts manager/src/main/services/ModAuditService.ts -Force
+          Copy-Item manager-v630/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v630/App.tsx manager/src/renderer/src/App.tsx -Force
+          node manager-v630/patch-main.cjs
+          node manager-v630/patch-distribution.cjs
+          node manager-v630/patch-ui-fixes.cjs
+
+          $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
+          $pkg.version = '6.3.0'
+          $pkg.author = 'SVFrame Team Studio'
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content manager/package.json -Encoding UTF8
+
+          New-Item -ItemType Directory -Force manager/src/renderer/public | Out-Null
+          Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
+          New-Item -ItemType Directory -Force manager/resources/gh | Out-Null
+          Copy-Item (Get-Command gh).Source manager/resources/gh/gh.exe -Force
+
+          New-Item -ItemType Directory -Force manager/build | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $source = [System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
+          try {
+            $bitmap = New-Object System.Drawing.Bitmap 512, 512
+            try {
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              try {
+                $graphics.Clear([System.Drawing.Color]::Transparent)
+                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $scale = [Math]::Min(440.0 / $source.Width, 440.0 / $source.Height)
+                $w = [int]($source.Width * $scale)
+                $h = [int]($source.Height * $scale)
+                $graphics.DrawImage($source, [int]((512-$w)/2), [int]((512-$h)/2), $w, $h)
+              } finally { $graphics.Dispose() }
+              $bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally { $bitmap.Dispose() }
+          } finally { $source.Dispose() }
+
+      - name: Verify Manager 6.3 contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $types = Get-Content manager/src/shared/types.ts -Raw
+          $workspace = Get-Content manager/src/main/services/WorkspaceService.ts -Raw
+          $audit = Get-Content manager/src/main/services/ModAuditService.ts -Raw
+          $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          $main = Get-Content manager/src/main/index.ts -Raw
+          $app = Get-Content manager/src/renderer/src/App.tsx -Raw
+          if ($types -notmatch "DistributionProfileId = ClientProfileId \| 'server'" -or $types -notmatch 'ModSideDetection' -or $types -notmatch 'ModPolicy') { throw 'Manager 6.3 side/policy types missing.' }
+          if ($workspace -notmatch 'mod-policies\.json' -or $workspace -notmatch 'detectModSide' -or $workspace -notmatch 'setModPolicy' -or $workspace -notmatch 'redetectMod') { throw 'Workspace mod policy persistence missing.' }
+          if ($audit -notmatch "environment === 'client'" -or $audit -notmatch "environment === 'server'" -or $audit -notmatch "environment === '\*'" -or $audit -notmatch 'MAX_CLASS_SAMPLES') { throw 'Fabric side detector contract missing.' }
+          if ($service -notmatch "includes\('server'\)" -or $service -notmatch 'enabledByPath' -or $service -notmatch 'sideByPath' -or $service -notmatch 'androidCompatibilityByPath') { throw 'Server/enabled/side publish contract missing.' }
+          if ($main -notmatch 'requestSingleInstanceLock' -or $main -notmatch "app\.on\('second-instance'" -or $main -notmatch 'restoreManagerWindow') { throw 'Manager lifecycle recovery missing.' }
+          if ($main -notmatch "app\.on\('window-all-closed'" -or $main -notmatch "process\.platform !== 'darwin'") { throw 'Manager close-to-exit contract missing.' }
+          if ($app -notmatch 'MOD DEPLOYMENT' -or $app -notmatch 'SIDE HIỆU LỰC' -or $app -notmatch 'PC FULL' -or $app -notmatch 'SERVER' -or $app -notmatch 'ANDROID') { throw 'Manager 6.3 deployment UI missing.' }
+          if ($app -match 'bestiary\.profile-map\.v3.*writeMap') { throw 'Primary profile policy still depends on renderer localStorage.' }
+          if ($app -notmatch 'Release Console 6\.3\.0') { throw 'Manager version UI missing.' }
+          Write-Host 'Manager 6.3 mod audit/profile/lifecycle contracts verified.'
+
+      - name: Install dependencies
+        working-directory: manager
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: manager
+        shell: pwsh
+        run: npm run typecheck
+
+      - name: Build NSIS installer
+        working-directory: manager
+        shell: pwsh
+        run: npm run dist:win
+
+      - name: Lifecycle test and hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.3.0.exe -ErrorAction Stop
+          $unpacked = Resolve-Path manager/release/win-unpacked
+          $exe = Get-Item (Join-Path $unpacked 'Bestiary Pack Manager.exe') -ErrorAction Stop
+          if ($installer.Length -lt 1000000 -or $exe.Length -lt 1000000) { throw 'Manager binary unexpectedly small.' }
+          if (-not (Test-Path (Join-Path $unpacked 'resources/app.asar'))) { throw 'Manager runtime missing app.asar.' }
+
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class BestiaryManagerWin32 {
+            public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+            [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+            [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+          }
+          '@
+          function Get-ManagerWindow([int]$Pid) {
+            $script:managerWindow=[IntPtr]::Zero
+            [BestiaryManagerWin32]::EnumWindows({ param($h,$l) [uint32]$wp=0; [void][BestiaryManagerWin32]::GetWindowThreadProcessId($h,[ref]$wp); if($wp -eq $Pid -and [BestiaryManagerWin32]::IsWindowVisible($h)){ $script:managerWindow=$h; return $false }; return $true },[IntPtr]::Zero)|Out-Null
+            return $script:managerWindow
+          }
+          function Wait-ManagerWindow([System.Diagnostics.Process]$Process,[int]$Seconds=25) {
+            $deadline=(Get-Date).AddSeconds($Seconds)
+            do { if($Process.HasExited){throw "Manager exited before showing UI: $($Process.ExitCode)"}; $h=Get-ManagerWindow $Process.Id; if($h -ne [IntPtr]::Zero){return $h}; Start-Sleep -Milliseconds 300 } while((Get-Date)-lt $deadline)
+            throw "Manager PID=$($Process.Id) did not show a visible window."
+          }
+
+          $env:ELECTRON_ENABLE_LOGGING='1'
+          Write-Host '=== Manager lifecycle: close -> exit ==='
+          $first=Start-Process -FilePath $exe.FullName -WorkingDirectory $unpacked -ArgumentList @('--enable-logging','--disable-gpu') -PassThru
+          $firstWindow=Wait-ManagerWindow $first
+          [void][BestiaryManagerWin32]::PostMessage($firstWindow,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)
+          if(-not $first.WaitForExit(12000)){Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue;throw 'Manager window closed but process stayed alive.'}
+
+          Write-Host '=== Manager lifecycle: reopen ==='
+          $primary=Start-Process -FilePath $exe.FullName -WorkingDirectory $unpacked -ArgumentList @('--enable-logging','--disable-gpu') -PassThru
+          $primaryWindow=Wait-ManagerWindow $primary
+
+          Write-Host '=== Manager lifecycle: second instance handoff ==='
+          $second=Start-Process -FilePath $exe.FullName -WorkingDirectory $unpacked -ArgumentList @('--enable-logging','--disable-gpu') -PassThru
+          if(-not $second.WaitForExit(8000)){Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue;Stop-Process -Id $primary.Id -Force -ErrorAction SilentlyContinue;throw 'Second Manager instance did not hand off.'}
+          if($primary.HasExited){throw 'Primary Manager exited during second-instance handoff.'}
+          $primaryWindow2=Wait-ManagerWindow $primary
+          [void][BestiaryManagerWin32]::PostMessage($primaryWindow2,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)
+          if(-not $primary.WaitForExit(12000)){Stop-Process -Id $primary.Id -Force -ErrorAction SilentlyContinue;throw 'Reopened Manager stayed alive after WM_CLOSE.'}
+
+          $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.3.0-SHA256.txt -Encoding ascii
+          Write-Host "Manager 6.3.0 SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryPackManager-Windows-6.3.0
+          path: |
+            manager/release/BestiaryPackManager-Setup-6.3.0.exe
+            manager/release/BestiaryPackManager-Setup-6.3.0-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish CI result
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $shaLine=Get-Content manager/release/BestiaryPackManager-Setup-6.3.0-SHA256.txt -Raw
+          $hash=($shaLine -split '\s+')[0].Trim().ToLowerInvariant()
+          $manifest=[ordered]@{version='6.3.0';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;lifecycleVerified=$true;modAuditVerified=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $path='manager-v630/ci-build.json'
+          $existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record verified Manager 6.3.0 build [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - name: Publish CI failure
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $text="run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME"
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+          $path='manager-v630/ci-failure.txt';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record Manager 6.3.0 CI failure [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
