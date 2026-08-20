@@ -1,8 +1,8 @@
-name: Build Bestiary Launcher 5.3.4
+name: Build Bestiary Launcher 5.3.5
 
 on:
   push:
-    branches: [bestiary-launcher-v5-3-4-deploy, bestiary-launcher-v5-1-0]
+    branches: [bestiary-launcher-v5-3-5-flow, bestiary-launcher-v5-1-0]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -46,68 +46,93 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build and runtime-test Launcher 5.3.4
+      - name: Build and runtime-test Launcher 5.3.5
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            & ./bestiary-v534/build.ps1 *>&1 | Tee-Object -FilePath ci-v534.log
-            if ($LASTEXITCODE -ne 0) { throw "5.3.4 build returned exit code $LASTEXITCODE" }
+            & ./bestiary-v535/build.ps1 *>&1 | Tee-Object -FilePath ci-v535.log
+            if ($LASTEXITCODE -ne 0) { throw "5.3.5 build returned exit code $LASTEXITCODE" }
           } catch {
-            $_ | Out-String | Tee-Object -FilePath ci-v534.log -Append
+            $_ | Out-String | Tee-Object -FilePath ci-v535.log -Append
             throw
           }
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Windows-5.3.4
+          name: BestiaryLauncher-Windows-5.3.5
           path: |
-            build-output-v534/BestiaryLauncher-Setup-5.3.4.exe
-            build-output-v534/BestiaryLauncher-Setup-5.3.4-SHA256.txt
-            build-output-v534/BestiaryLauncher-Portable-5.3.4.zip
-            build-output-v534/BestiaryLauncher-Portable-5.3.4-SHA256.txt
-            build-output-v534/bestiary-skin-bridge-1.0.0.jar
-            build-output-v534/bestiary-skin-bridge-1.0.0-SHA256.txt
-            build-output-v534/runtime-smoke-stdout.log
-            build-output-v534/runtime-smoke-stderr.log
+            build-output-v535/BestiaryLauncher-Setup-5.3.5.exe
+            build-output-v535/BestiaryLauncher-Setup-5.3.5-SHA256.txt
+            build-output-v535/BestiaryLauncher-Portable-5.3.5.zip
+            build-output-v535/BestiaryLauncher-Portable-5.3.5-SHA256.txt
+            build-output-v535/bestiary-skin-bridge-1.0.0.jar
+            build-output-v535/bestiary-skin-bridge-1.0.0-SHA256.txt
+            build-output-v535/runtime-smoke-stdout.log
+            build-output-v535/runtime-smoke-stderr.log
           if-no-files-found: error
           retention-days: 7
 
-      - name: Publish durable Launcher release assets
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = 'launcher-v5.3.4'
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.4' --notes 'Hybrid launch policy: Local/Offline remains direct Bestiary launch. Microsoft mode syncs the Bestiary client, prepares a dedicated Bestiary Rebirth installation in the official Minecraft Launcher, and delegates Microsoft authentication, entitlement and game session handling to the official launcher. Direct MSA remains available behind the remote microsoftDirectLaunch flag for post-approval use.'
-          }
-          gh release upload $tag build-output-v534/BestiaryLauncher-Setup-5.3.4.exe build-output-v534/BestiaryLauncher-Setup-5.3.4-SHA256.txt build-output-v534/BestiaryLauncher-Portable-5.3.4.zip build-output-v534/BestiaryLauncher-Portable-5.3.4-SHA256.txt build-output-v534/bestiary-skin-bridge-1.0.0.jar build-output-v534/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
-
-      - name: Publish CI release manifest
+      - name: Publish CI build manifest
         if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $shaLine = Get-Content 'build-output-v534/BestiaryLauncher-Setup-5.3.4-SHA256.txt' -Raw
+          $shaLine = Get-Content 'build-output-v535/BestiaryLauncher-Setup-5.3.5-SHA256.txt' -Raw
           $installerSha = ($shaLine -split '\s+')[0].Trim().ToLowerInvariant()
           if ($installerSha -notmatch '^[a-f0-9]{64}$') { throw 'Installer SHA manifest is invalid.' }
           $manifest = [ordered]@{
-            version = '5.3.4'
-            installerUrl = 'https://github.com/aristheg201/codespaces-blank/releases/download/launcher-v5.3.4/BestiaryLauncher-Setup-5.3.4.exe'
+            version = '5.3.5'
+            sha256 = $installerSha
+            sourceCommit = $env:GITHUB_SHA
+            branch = $env:GITHUB_REF_NAME
+            verified = $true
+          } | ConvertTo-Json -Depth 4
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $path = 'bestiary-v535/ci-build.json'
+          $existingSha = ''
+          try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
+          $payload = @{ message = 'Record verified Bestiary Launcher 5.3.5 build [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          if ($existingSha) { $payload.sha = $existingSha }
+          $json = $payload | ConvertTo-Json -Compress
+          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+
+      - name: Publish durable Launcher release assets
+        if: github.event_name == 'push' && github.ref_name == 'bestiary-launcher-v5-1-0'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'launcher-v5.3.5'
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.5' --notes 'Restores the 5.3.3 account and Home UI. Login with Microsoft remains in Bestiary using Microsoft identity only; Play in Microsoft mode syncs Bestiary and opens the official Minecraft Launcher. Local / Offline still launches directly. Xbox/XSTS/Minecraft Services stay behind microsoftDirectLaunch for future approved direct launch.'
+          }
+          gh release upload $tag build-output-v535/BestiaryLauncher-Setup-5.3.5.exe build-output-v535/BestiaryLauncher-Setup-5.3.5-SHA256.txt build-output-v535/BestiaryLauncher-Portable-5.3.5.zip build-output-v535/BestiaryLauncher-Portable-5.3.5-SHA256.txt build-output-v535/bestiary-skin-bridge-1.0.0.jar build-output-v535/bestiary-skin-bridge-1.0.0-SHA256.txt --clobber
+
+      - name: Publish CI release manifest
+        if: github.event_name == 'push' && github.ref_name == 'bestiary-launcher-v5-1-0'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $shaLine = Get-Content 'build-output-v535/BestiaryLauncher-Setup-5.3.5-SHA256.txt' -Raw
+          $installerSha = ($shaLine -split '\s+')[0].Trim().ToLowerInvariant()
+          if ($installerSha -notmatch '^[a-f0-9]{64}$') { throw 'Installer SHA manifest is invalid.' }
+          $manifest = [ordered]@{
+            version = '5.3.5'
+            installerUrl = 'https://github.com/aristheg201/codespaces-blank/releases/download/launcher-v5.3.5/BestiaryLauncher-Setup-5.3.5.exe'
             sha256 = $installerSha
             sourceCommit = $env:GITHUB_SHA
             verified = $true
           } | ConvertTo-Json -Depth 4
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
-          $path = 'bestiary-v534/ci-release.json'
+          $path = 'bestiary-v535/ci-release.json'
           $existingSha = ''
           try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
-          $payload = @{ message = 'Record verified Bestiary Launcher 5.3.4 release [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          $payload = @{ message = 'Record verified Bestiary Launcher 5.3.5 release [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
           $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
@@ -118,13 +143,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tail = if (Test-Path 'ci-v534.log') { (Get-Content 'ci-v534.log' -Tail 300) -join "`n" } else { 'Build failed before ci-v534.log was created.' }
+          $tail = if (Test-Path 'ci-v535.log') { (Get-Content 'ci-v535.log' -Tail 300) -join "`n" } else { 'Build failed before ci-v535.log was created.' }
           $report = "run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($report))
-          $path = 'bestiary-v534/ci-failure.txt'
+          $path = 'bestiary-v535/ci-failure.txt'
           $existingSha = ''
           try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
-          $payload = @{ message = 'Record Bestiary Launcher 5.3.4 CI failure [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          $payload = @{ message = 'Record Bestiary Launcher 5.3.5 CI failure [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
           $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
