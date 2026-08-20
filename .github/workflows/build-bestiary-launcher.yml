@@ -93,11 +93,12 @@ jobs:
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
           $path = 'bestiary-v535/ci-build.json'
           $existingSha = ''
-          try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object { $existingSha = $_ }
           $payload = @{ message = 'Record verified Bestiary Launcher 5.3.5 build [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
-          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to publish CI build manifest.' }
 
       - name: Publish durable Launcher release assets
         if: github.event_name == 'push' && github.ref_name == 'bestiary-launcher-v5-1-0'
@@ -131,11 +132,12 @@ jobs:
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
           $path = 'bestiary-v535/ci-release.json'
           $existingSha = ''
-          try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object { $existingSha = $_ }
           $payload = @{ message = 'Record verified Bestiary Launcher 5.3.5 release [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
-          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to publish CI release manifest.' }
 
       - name: Publish CI failure report
         if: failure() && github.event_name == 'push'
@@ -148,8 +150,8 @@ jobs:
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($report))
           $path = 'bestiary-v535/ci-failure.txt'
           $existingSha = ''
-          try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object { $existingSha = $_ }
           $payload = @{ message = 'Record Bestiary Launcher 5.3.5 CI failure [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
-          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
