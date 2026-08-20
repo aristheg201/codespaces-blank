@@ -1,0 +1,112 @@
+name: Build Bestiary Launcher 5.3.6
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-3-6-lifecycle]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 80
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and lifecycle-test Launcher 5.3.6
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            & ./bestiary-v536/build.ps1 *>&1 | Tee-Object -FilePath ci-v536.log
+            if ($LASTEXITCODE -ne 0) { throw "5.3.6 build returned exit code $LASTEXITCODE" }
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v536.log -Append
+            throw
+          }
+
+      - name: Upload lifecycle-verified artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.3.6
+          path: |
+            build-output-v536/BestiaryLauncher-Setup-5.3.6.exe
+            build-output-v536/BestiaryLauncher-Setup-5.3.6-SHA256.txt
+            build-output-v536/BestiaryLauncher-Portable-5.3.6.zip
+            build-output-v536/BestiaryLauncher-Portable-5.3.6-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish CI build manifest
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $shaLine = Get-Content 'build-output-v536/BestiaryLauncher-Setup-5.3.6-SHA256.txt' -Raw
+          $installerSha = ($shaLine -split '\s+')[0].Trim().ToLowerInvariant()
+          if ($installerSha -notmatch '^[a-f0-9]{64}$') { throw 'Installer SHA manifest is invalid.' }
+          $manifest = [ordered]@{
+            version = '5.3.6'
+            sha256 = $installerSha
+            sourceCommit = $env:GITHUB_SHA
+            branch = $env:GITHUB_REF_NAME
+            runId = $env:GITHUB_RUN_ID
+            lifecycleVerified = $true
+            verified = $true
+          } | ConvertTo-Json -Depth 4
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $path = 'bestiary-v536/ci-build.json'
+          $existingSha = ''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object { $existingSha = $_ }
+          $payload = @{ message = 'Record verified Bestiary Launcher 5.3.6 lifecycle build [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          if ($existingSha) { $payload.sha = $existingSha }
+          ($payload | ConvertTo-Json -Compress) | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to publish CI build manifest.' }
+
+      - name: Publish CI failure report
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail = if (Test-Path 'ci-v536.log') { (Get-Content 'ci-v536.log' -Tail 300) -join "`n" } else { 'Build failed before ci-v536.log was created.' }
+          $report = "run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($report))
+          $path = 'bestiary-v536/ci-failure.txt'
+          $existingSha = ''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object { $existingSha = $_ }
+          $payload = @{ message = 'Record Bestiary Launcher 5.3.6 CI failure [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          if ($existingSha) { $payload.sha = $existingSha }
+          ($payload | ConvertTo-Json -Compress) | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
