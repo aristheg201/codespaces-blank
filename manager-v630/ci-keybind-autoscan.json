@@ -1,9 +1,9 @@
 {
   "version": "6.3.1",
-  "sha256": "d0531fdb4ae60fe9a65cd9d3a15ce368ee1c3f8e893209a5786eaa6cac17da41",
-  "sourceCommit": "0ed71eb58ffdef61e724aa46c6fa5223f828f43b",
+  "sha256": "0b7f810721b7b13f28500ae0a160e7aae3005a84598e51f2a1651a751ef15177",
+  "sourceCommit": "31c3fa01faf35f264f1c6c1e0a173d15e9ac8e30",
   "branch": "bestiary-manager-v6-3-1-keybind-autoscan",
-  "runId": "32376507427",
+  "runId": "32378077717",
   "modAuditVerified": true,
   "lifecycleVerified": true,
   "keybindManagerVerified": true,
