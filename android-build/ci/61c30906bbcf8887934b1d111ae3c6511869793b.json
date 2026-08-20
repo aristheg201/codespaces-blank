@@ -1,0 +1,10 @@
+{
+  "version": "1.0.2",
+  "variant": "debug",
+  "sha256": "ac88a02a226ee87e354eea80d29b262392e0e2b9f28bb55fbb19f26b7c5b8a3d",
+  "sourceCommit": "61c30906bbcf8887934b1d111ae3c6511869793b",
+  "branch": "bestiary-android-v1-0-2",
+  "runId": 32340060170,
+  "upstreamCommit": "360d708262ff703d9b52782d20cd348410a33df5",
+  "verified": true
+}
