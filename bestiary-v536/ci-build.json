@@ -1,9 +1,9 @@
 {
   "version": "5.3.6",
-  "sha256": "7fa25510fb0ad1271b2d403ca684f3b132228531cff4e6a353ca2f7c03194f8e",
-  "sourceCommit": "7d9a1043eb356cfba121235cd201b429ee19657e",
-  "branch": "bestiary-launcher-v5-1-0",
-  "runId": "32344394874",
+  "sha256": "4a08c9b7c21c51810507521b6915540ca63b741ec5666921954c4d335f8d79a7",
+  "sourceCommit": "04c6e15fa1a5009d526dc66e265406b2044b12dd",
+  "branch": "bestiary-launcher-v5-3-6-prod",
+  "runId": "32345850646",
   "lifecycleVerified": true,
   "verified": true
 }
