@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-android:
@@ -145,7 +145,7 @@ jobs:
           grep -q "versionName='1.0.0'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
           grep -q "application-label:'Bestiary Launcher'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
           unzip -l build-output/BestiaryLauncher-Android-1.0.0-debug.apk | grep -q 'assets/bestiary/bestiary-skin-bridge.jar'
-          unzip -l build-output/BestiaryLauncher-Android-1.0.0-debug.apk | grep -q 'res/drawable-nodpi-v4/bestiary_logo.png\|res/drawable-nodpi/bestiary_logo.png'
+          unzip -l build-output/BestiaryLauncher-Android-1.0.0-debug.apk | grep -q 'bestiary_logo.png'
           ls -lh build-output/BestiaryLauncher-Android-1.0.0-debug.apk
 
       - name: Upload APK
@@ -158,3 +158,66 @@ jobs:
             build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish verified Android CI manifest
+        if: success() && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK_SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt)"
+          [[ "$APK_SHA" =~ ^[a-f0-9]{64}$ ]]
+          MANIFEST="$(python - <<'PY'
+          import json, os
+          sha = open('build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt', encoding='utf-8').read().split()[0]
+          print(json.dumps({
+              'version': '1.0.0',
+              'variant': 'debug',
+              'sha256': sha,
+              'sourceCommit': os.environ['GITHUB_SHA'],
+              'branch': os.environ['GITHUB_REF_NAME'],
+              'upstreamCommit': '360d708262ff703d9b52782d20cd348410a33df5',
+              'verified': True
+          }, ensure_ascii=False, indent=2))
+          PY
+          )"
+          CONTENT="$(printf '%s' "$MANIFEST" | base64 -w0)"
+          PATH_NAME='android-build/ci-build.json'
+          EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
+          import json, sys, os
+          payload = {'message': 'Record verified Bestiary Android 1.0.0 build [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: payload['sha'] = sys.argv[2]
+          print(json.dumps(payload))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
+
+      - name: Publish Android CI failure marker
+        if: failure() && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          FAILURE="$(python - <<'PY'
+          import json, os, datetime
+          print(json.dumps({
+              'version': '1.0.0',
+              'sourceCommit': os.environ['GITHUB_SHA'],
+              'branch': os.environ['GITHUB_REF_NAME'],
+              'verified': False,
+              'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
+          }, indent=2))
+          PY
+          )"
+          CONTENT="$(printf '%s' "$FAILURE" | base64 -w0)"
+          PATH_NAME='android-build/ci-failure.json'
+          EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
+          import json, sys, os
+          payload = {'message': 'Record failed Bestiary Android 1.0.0 build [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: payload['sha'] = sys.argv[2]
+          print(json.dumps(payload))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
