@@ -107,7 +107,7 @@ jobs:
           grep -q 'bestiarySkinPicker' "$LAUNCHER"
           grep -q 'File đã chọn không phải PNG hợp lệ' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiarySkinManager.java
           grep -q 'CHƠI NGAY' "$HOME"
-          grep -q 'TÀI KHOẢN & SKIN' "$HOME"
+          grep -q 'TÀI KHOẢN &amp; SKIN' "$HOME"
           grep -q 'screenOrientation="portrait"' "$MANIFEST"
           test -s amethyst/app_pojavlauncher/src/main/res/drawable-nodpi/bestiary_logo.png
           test -s amethyst/app_pojavlauncher/src/main/assets/bestiary/bestiary-skin-bridge.jar
