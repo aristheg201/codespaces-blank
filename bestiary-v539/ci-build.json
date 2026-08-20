@@ -1,0 +1,18 @@
+{
+  "version": "5.3.9",
+  "sha256": "0d1aa31c314bb938faedd50a77597887223fee7a3131f96b981c56a7fd2d6d50",
+  "sourceCommit": "cefe43f90078f787fae84507b439e283ec8bc890",
+  "branch": "bestiary-launcher-v5-3-9-adaptive-jvm",
+  "runId": 32387513111,
+  "adaptiveJvmVerified": true,
+  "lowMemory4GbVerified": true,
+  "java21FlagsVerified": true,
+  "atomicRamJvmProfileVerified": true,
+  "weakMemoryMigrationVerified": true,
+  "microsoftRuntimeSettingsVerified": true,
+  "lifecycleVerified": true,
+  "keybindConsumerVerified": true,
+  "runtimeSmokeVerified": true,
+  "releasePublished": true,
+  "verified": true
+}
