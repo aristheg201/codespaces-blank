@@ -26,7 +26,7 @@ $bridge = Get-Content 'source/src/main/core/OfficialLauncherBridge.ts' -Raw
 $remote = Get-Content 'source/src/main/core/RemoteService.ts' -Raw
 $main = Get-Content 'source/src/main/index.ts' -Raw
 $ipc = Get-Content 'source/src/shared/ipc.ts' -Raw
-$home = Get-Content 'source/src/renderer/src/components/Home.tsx' -Raw
+$homeSource = Get-Content 'source/src/renderer/src/components/Home.tsx' -Raw
 $accountUi = Get-Content 'source/src/renderer/src/components/AccountScreen.tsx' -Raw
 $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 
@@ -39,9 +39,9 @@ if ($main -notmatch 'officialLauncherBridge\.prepareAndOpen\(profileId\)') { thr
 if ($main -notmatch 'microsoftDirectLaunch: false') { throw 'Bridge mode must be the safe default.' }
 if ($remote -notmatch 'microsoftDirectLaunch') { throw 'Remote direct-launch feature flag missing.' }
 if ($ipc -notmatch 'microsoftDirectLaunch: boolean') { throw 'Renderer launch strategy metadata missing.' }
-if ($home -notmatch 'MINECRAFT LAUNCHER') { throw 'Home Microsoft bridge CTA missing.' }
+if ($homeSource -notmatch 'MINECRAFT LAUNCHER') { throw 'Home Microsoft bridge CTA missing.' }
 if ($accountUi -notmatch 'MINECRAFT LAUNCHER') { throw 'Account Microsoft bridge selector missing.' }
-if ($accountUi -match '(?i)crack' -or $account -match '(?i)crack' -or $home -match '(?i)crack') { throw 'Legacy crack terminology returned.' }
+if ($accountUi -match '(?i)crack' -or $account -match '(?i)crack' -or $homeSource -match '(?i)crack') { throw 'Legacy crack terminology returned.' }
 if ($appSource -notmatch "currentVersion: '5\.3\.4'") { throw 'Launcher 5.3.4 version metadata missing.' }
 
 Write-Host 'Launcher 5.3.4 hybrid contracts verified.'
