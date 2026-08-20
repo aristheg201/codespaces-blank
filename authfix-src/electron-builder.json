@@ -1,0 +1,41 @@
+{
+  "appId": "vn.bestiary.packmanager",
+  "productName": "Bestiary Pack Manager",
+  "artifactName": "BestiaryPackManager-Setup-${version}.${ext}",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "resources",
+      "to": "resources"
+    }
+  ],
+  "asar": true,
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.png",
+    "executableName": "Bestiary Pack Manager"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Bestiary Pack Manager",
+    "runAfterFinish": true,
+    "deleteAppDataOnUninstall": false
+  }
+}
