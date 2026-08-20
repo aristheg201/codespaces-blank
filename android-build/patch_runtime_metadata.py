@@ -32,3 +32,4 @@ print('Bestiary runtime metadata + Quick Play patch applied')
 
 exec(Path('android-build/patch_offline_sync.py').read_text(encoding='utf-8'))
 exec(Path('android-build/patch_offline_compile_fix.py').read_text(encoding='utf-8'))
+exec(Path('android-build/prepare_bestiary_logo.py').read_text(encoding='utf-8'))
