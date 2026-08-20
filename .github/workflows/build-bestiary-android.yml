@@ -2,7 +2,7 @@ name: Build Bestiary Launcher Android 1.0.0
 
 on:
   push:
-    branches: [bestiary-android-launcher-v1]
+    branches: [bestiary-android-v1-0-0]
   workflow_dispatch:
 
 permissions:
@@ -54,9 +54,24 @@ jobs:
           set -euo pipefail
           python android-build/patch_bestiary_android.py
           python android-build/patch_android_compat.py
+          python android-build/patch_runtime_metadata.py
+          python android-build/patch_bestiary_android_v100.py
+
+          BOOTSTRAP=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
+          LAUNCHER=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java
+          HOME=amethyst/app_pojavlauncher/src/main/res/layout/fragment_launcher.xml
+          MANIFEST=amethyst/app_pojavlauncher/src/main/AndroidManifest.xml
+
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' amethyst/app_pojavlauncher/build.gradle
-          grep -q '1.21.1/0.18.4/profile/json' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
-          grep -q 'opengles_mobileglues' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
+          grep -q 'versionName "1.0.0"' amethyst/app_pojavlauncher/build.gradle
+          grep -q 'BestiaryOfflineAccount.prompt(this)' "$LAUNCHER"
+          ! grep -q 'Tools.swapFragment(this, SelectAuthFragment.class' "$LAUNCHER"
+          grep -q 'includesAndroidProfile(item)' "$BOOTSTRAP"
+          grep -q 'BestiaryRendererPolicy.apply()' "$BOOTSTRAP"
+          grep -q 'BestiaryAppUpdater.check(this)' "$LAUNCHER"
+          grep -q 'CHƠI NGAY' "$HOME"
+          grep -q 'screenOrientation="portrait"' "$MANIFEST"
+          test -s amethyst/app_pojavlauncher/src/main/res/drawable-nodpi/bestiary_logo.png
 
       - name: Generate language list
         working-directory: amethyst
@@ -74,7 +89,7 @@ jobs:
           chmod +x gradlew
           ./gradlew :jre_lwjgl3glfw:build :app_pojavlauncher:assembleDebug --stacktrace --no-daemon
 
-      - name: Stage APK and SHA-256
+      - name: Verify APK identity and stage artifact
         shell: bash
         run: |
           set -euo pipefail
@@ -83,6 +98,13 @@ jobs:
           test -n "$APK"
           cp "$APK" build-output/BestiaryLauncher-Android-1.0.0-debug.apk
           sha256sum build-output/BestiaryLauncher-Android-1.0.0-debug.apk > build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
+
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$AAPT"
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.0-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
+          grep -q "versionName='1.0.0'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
+          grep -q "application-label:'Bestiary Launcher'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
           ls -lh build-output/BestiaryLauncher-Android-1.0.0-debug.apk
 
       - name: Upload APK
@@ -92,5 +114,6 @@ jobs:
           path: |
             build-output/BestiaryLauncher-Android-1.0.0-debug.apk
             build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
+            build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
           if-no-files-found: error
           retention-days: 7
