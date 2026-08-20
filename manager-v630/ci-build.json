@@ -1,9 +1,9 @@
 {
   "version": "6.3.0",
-  "sha256": "6ef51be5b19a967b74116e3dcf6410092582a19d6806ed0bf105e7bd0d06ef0d",
-  "sourceCommit": "e1bdc57150e01224365e3165dae3dcf1e6cc1ab4",
+  "sha256": "de8ed2b0fe84e1e34d9a0b611d1de4fce32601554c1ff54101e916ed660f9b8a",
+  "sourceCommit": "6e0af167d1e015c3dafab499e8fd3844d1cd4c5a",
   "branch": "bestiary-manager-v6-3-0-mod-audit",
-  "runId": "32352312566",
+  "runId": "32352362632",
   "lifecycleVerified": true,
   "modAuditVerified": true,
   "verified": true
