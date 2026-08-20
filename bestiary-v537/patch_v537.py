@@ -6,7 +6,6 @@ main = root / 'src/main/index.ts'
 home_css = root / 'src/renderer/src/components/Home.css'
 app = root / 'src/renderer/src/App.tsx'
 home = root / 'src/renderer/src/components/Home.tsx'
-keybind_target = root / 'src/main/core/KeybindPolicyService.ts'
 
 
 def req(ok, msg):
@@ -21,22 +20,19 @@ s = s.replace('if (!gotSingleInstanceLock) {\n  app.quit();\n}', 'if (!gotSingle
 s = s.replace('if (!gotSingleInstanceLock) app.quit();', 'if (!gotSingleInstanceLock) app.exit(0);', 1)
 req('app.exit(0)' in s, 'rejected second instance is not hard-exited')
 
-# Keybind consumer. Copy service in build script before this patch.
 if "import { KeybindPolicyService } from './core/KeybindPolicyService';" not in s:
-    import_marker = "import {"
-    idx = s.find(import_marker)
-    req(idx >= 0, 'main import marker missing')
-    s = s[:idx] + "import { KeybindPolicyService } from './core/KeybindPolicyService';\n" + s[idx:]
+    marker = "import { ContentManager } from './core/ContentManager';"
+    req(marker in s, 'ContentManager import marker missing')
+    s = s.replace(marker, marker + "\nimport { KeybindPolicyService } from './core/KeybindPolicyService';", 1)
 
-# Instantiate beside the other singleton services. The service needs only the game dir.
-if 'let keybindPolicyService:' not in s:
-    marker = 'let mainWindow: BrowserWindow | null = null;'
-    req(marker in s, 'mainWindow singleton marker missing')
-    s = s.replace(marker, marker + '\nlet keybindPolicyService: KeybindPolicyService;', 1)
+# Use the exact same authoritative gameDirectory that ContentManager and AccountService use.
+# No path is stored in LauncherSettings.
+instance_marker = 'const contentManager = new ContentManager(gameDirectory, ownershipFilePath);'
+req(instance_marker in s, 'authoritative gameDirectory marker missing')
+if 'const keybindPolicyService = new KeybindPolicyService(gameDirectory);' not in s:
+    s = s.replace(instance_marker, instance_marker + '\nconst keybindPolicyService = new KeybindPolicyService(gameDirectory);', 1)
 
-# Find a stable game-directory expression from SettingsStore construction or launcher setup.
-# Bestiary source consistently exposes settings.gameDirectory in the launch handler. Apply
-# immediately before the first actual Minecraft launch call, after sync has completed.
+# Apply after sync/Fabric preparation and immediately before Minecraft launch.
 launch_patterns = [
     r'(\n\s*)(return\s+await\s+minecraftLauncher\.launch\()',
     r'(\n\s*)(await\s+minecraftLauncher\.launch\()',
@@ -53,32 +49,9 @@ for pat in launch_patterns:
         break
 req(inserted, 'Minecraft launch call marker missing for keybind policy')
 
-# Initialize once settings/game directory is known. There is always a SettingsStore load in ready().
-if 'keybindPolicyService = new KeybindPolicyService(' not in s:
-    candidates = [
-        r'(const\s+settings\s*=\s*await\s+settingsStore\.load\(\);)',
-        r'(await\s+settingsStore\.load\(\);)',
-    ]
-    done = False
-    for pat in candidates:
-        m = re.search(pat, s)
-        if not m:
-            continue
-        after = m.group(1)
-        injection = after + "\n  keybindPolicyService = new KeybindPolicyService((await settingsStore.load()).gameDirectory);"
-        s = s[:m.start()] + injection + s[m.end():]
-        done = True
-        break
-    if not done:
-        # Fallback: SettingsStore exposes game directory through loaded launcher settings in this source.
-        marker = 'app.whenReady().then(async () => {'
-        req(marker in s, 'app.whenReady marker missing')
-        s = s.replace(marker, marker + "\n  const bestiaryInitialSettings = await settingsStore.load();\n  keybindPolicyService = new KeybindPolicyService(bestiaryInitialSettings.gameDirectory);", 1)
-
 main.write_text(s, encoding='utf-8')
 
-# Desktop scrollbar. Keep root clipping so overlays do not create double scrolling;
-# make the Home surface the real scroll container.
+# Desktop scrolling remains inside Home, so root/modal clipping does not create double bars.
 css = home_css.read_text(encoding='utf-8')
 req('overflow: hidden;' in css, 'Home root overflow contract missing')
 css += r'''
@@ -121,10 +94,9 @@ for p in (app, home):
     t = p.read_text(encoding='utf-8').replace('5.3.6', '5.3.7').replace('5.3.5', '5.3.7')
     p.write_text(t, encoding='utf-8')
 
-# Contracts.
 ms = main.read_text(encoding='utf-8')
 req('app.exit(0)' in ms, 'hard second-instance exit missing')
+req('const keybindPolicyService = new KeybindPolicyService(gameDirectory);' in ms, 'authoritative keybind game directory missing')
 req('await keybindPolicyService.apply();' in ms, 'keybind pre-launch apply missing')
-req("KeybindPolicyService" in ms, 'keybind service import missing')
 req('overflow-y: auto' in home_css.read_text(encoding='utf-8'), 'desktop scrollbar missing')
 print('Launcher 5.3.7 lifecycle, scrollbar and keybind policy patch applied.')
