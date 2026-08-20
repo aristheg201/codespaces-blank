@@ -1,13 +1,14 @@
 {
   "version": "5.3.7",
-  "sha256": "7b4f8c36889620a6406558f33e942fe69052d3fbf8015db9533f52e7c4ce053e",
-  "sourceCommit": "b5c42800f3a08b10988a5b20751a7758a5b3c27d",
+  "sha256": "4b438c0bb126bf1b28b35b4687efadd46d746438b953c2fdc68e711df6a8b5d0",
+  "sourceCommit": "b9309acdc4a1fbcd078e31261719513652334d4a",
   "branch": "bestiary-launcher-v5-3-7-lifecycle-keybind",
-  "runId": "32353892508",
+  "runId": "32376493095",
   "lifecycleVerified": true,
   "installedLifecycleVerified": true,
   "processTreeVerified": true,
   "scrollbarVerified": true,
   "keybindConsumerVerified": true,
+  "releasePublished": true,
   "verified": true
 }
