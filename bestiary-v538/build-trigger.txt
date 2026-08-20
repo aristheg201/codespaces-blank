@@ -1,0 +1,1 @@
+build Bestiary Launcher 5.3.8 Microsoft RAM/JVM bridge
