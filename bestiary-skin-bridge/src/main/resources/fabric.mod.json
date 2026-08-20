@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "bestiary_skin_bridge",
+  "version": "${version}",
+  "name": "Bestiary Skin Bridge",
+  "description": "Secure Bestiary player skin sync for offline and Microsoft accounts.",
+  "authors": ["SVFrame Team Studio"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["vn.svframe.bestiary.skinbridge.BestiarySkinBridge"],
+    "client": ["vn.svframe.bestiary.skinbridge.BestiarySkinBridgeClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": { "skinrestorer": "*" }
+}
