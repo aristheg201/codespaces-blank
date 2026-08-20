@@ -1,0 +1,11 @@
+run=32352225335
+commit=b25b4f83f7e71daa71f7e2336f6eefb2e0c78ff0
+branch=bestiary-launcher-v5-3-7-lifecycle-keybind
+
+ParserError: D:\a\codespaces-blank\codespaces-blank\bestiary-v537\build.ps1:69
+Line |
+  69 |      Write-Host "Lifecycle round $round: open -> close -> zero process …
+     |                                  ~~~~~~~
+     | Variable reference is not valid. ':' was not followed by a valid variable name character. Consider using ${} to
+     | delimit the name.
+
