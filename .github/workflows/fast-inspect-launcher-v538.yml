@@ -1,0 +1,141 @@
+name: Fast Inspect Bestiary Launcher 5.3.8 Baseline
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-3-8-microsoft-runtime-sync]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  inspect-fast:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reconstruct source without package builds
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Remove-Item source -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force source | Out-Null
+          $baseParts=@('src5-00','src5-01','src5-02','src5-03a','src5-03b','src5-04','src5-05')
+          $baseB64=($baseParts|ForEach-Object{(Get-Content "bestiary-build/$_" -Raw).Trim()})-join ''
+          [IO.File]::WriteAllBytes('base-source-v538.tar.gz',[Convert]::FromBase64String($baseB64))
+          tar -xzf base-source-v538.tar.gz -C source
+          if($LASTEXITCODE -ne 0){throw 'Unable to reconstruct base source.'}
+          @'
+          import base64,pathlib,zlib
+          root=pathlib.Path('bestiary-v510/overlay'); names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
+          text=''.join((root/n).read_text(encoding='utf-8').strip() for n in names); text+='='*((4-len(text)%4)%4)
+          d=zlib.decompressobj(16+zlib.MAX_WBITS); raw=d.decompress(base64.b64decode(text)); allowed=pathlib.Path('source').resolve(); start=0
+          while True:
+              p=raw.find(b'ustar',start)
+              if p<0: break
+              start=p+5; h0=p-257
+              if h0<0 or h0+512>len(raw): continue
+              h=raw[h0:h0+512]; name=h[:100].split(b'\0',1)[0].decode('utf-8','replace'); prefix=h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
+              if prefix: name=prefix+'/'+name
+              try: size=int(h[124:136].split(b'\0',1)[0].strip() or b'0',8)
+              except Exception: continue
+              data0=h0+512
+              if size<0 or data0+size>len(raw) or not name.startswith('src/'): continue
+              target=(allowed/name).resolve()
+              if allowed not in target.parents: continue
+              target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(raw[data0:data0+size])
+          '@ | Set-Content recover_overlay_v538.py -Encoding UTF8
+          python recover_overlay_v538.py
+          Copy-Item bestiary-v510-final/fixes/ipc.ts source/src/shared/ipc.ts -Force
+          Copy-Item bestiary-v510-final/fixes/SettingsStore.ts source/src/main/core/SettingsStore.ts -Force
+          Copy-Item bestiary-v510-final/fixes/preload-index.ts source/src/preload/index.ts -Force
+          Copy-Item bestiary-v510-final/fixes/App.tsx source/src/renderer/src/App.tsx -Force
+          Copy-Item bestiary-v510-final/fixes/Home.tsx source/src/renderer/src/components/Home.tsx -Force
+          Copy-Item bestiary-v510-final/fixes/Home.css source/src/renderer/src/components/Home.css -Force
+          Copy-Item bestiary-v510-final/fixes/ProfileChooser.tsx source/src/renderer/src/components/ProfileChooser.tsx -Force
+          Copy-Item bestiary-v510-final/fixes/SettingsModal.tsx source/src/renderer/src/components/SettingsModal.tsx -Force
+          Copy-Item bestiary-build/electron-builder.json source/electron-builder.json -Force
+          @'
+          from pathlib import Path
+          p=Path('source/src/main/index.ts'); s=p.read_text(encoding='utf-8')
+          s=s.replace('  const generated = generateJvmProfile(settings, release);\n','')
+          s=s.replace('    generatedJvmArgs: generated.args,','    generatedJvmArgs: settings.generatedJvmArgs,')
+          s=s.replace('      extraJvmArgs: generateJvmProfile(settings, remote).args,','      extraJvmArgs: settings.generatedJvmArgs,')
+          marker="  ipcMain.handle('bestiary:start-game', async (_event, settings: LauncherSettings) => startGame(settings));"
+          insertion="  ipcMain.handle('bestiary:generate-jvm', async (_event, input: LauncherSettings) => {\n    const remote = currentRemote ?? (await getRemote());\n    const generated = generateJvmProfile(input, remote);\n    await settingsStore.save({ ...input, generatedJvmArgs: generated.args });\n    return snapshot();\n  });\n"
+          if marker not in s: raise SystemExit('start-game IPC marker missing')
+          p.write_text(s.replace(marker,insertion+marker),encoding='utf-8')
+          home=Path('source/src/renderer/src/components/Home.tsx'); home.write_text(home.read_text(encoding='utf-8').replace('5.1.2','5.1.3'),encoding='utf-8')
+          '@ | Set-Content patch_v513_fast.py -Encoding UTF8
+          python patch_v513_fast.py
+
+          Copy-Item bestiary-v510-final/fixes/UxPanels.css source/src/renderer/src/components/UxPanels.css -Force
+          Copy-Item bestiary-v510-final/fixes/LauncherUx.css source/src/renderer/src/components/LauncherUx.css -Force
+          Copy-Item bestiary-v510-final/fixes/DiscordText.tsx source/src/renderer/src/components/DiscordText.tsx -Force
+          Copy-Item bestiary-v510-final/fixes/AnnouncementModal.tsx source/src/renderer/src/components/AnnouncementModal.tsx -Force
+          Copy-Item bestiary-v515/fixes/ContentManager.ts source/src/main/core/ContentManager.ts -Force
+          Copy-Item bestiary-v515/fixes/LibraryModal.tsx source/src/renderer/src/components/LibraryModal.tsx -Force
+          Copy-Item bestiary-v515/fixes/LibraryUx.css source/src/renderer/src/components/LibraryUx.css -Force
+          Copy-Item bestiary-v520/fixes/App.tsx source/src/renderer/src/App.tsx -Force
+          Copy-Item bestiary-v520/fixes/ContentScreen.tsx source/src/renderer/src/components/ContentScreen.tsx -Force
+          Copy-Item bestiary-v520/fixes/ContentScreen.css source/src/renderer/src/components/ContentScreen.css -Force
+          Copy-Item bestiary-v520/fixes/AppUpdate.css source/src/renderer/src/components/AppUpdate.css -Force
+          Copy-Item bestiary-v520/fixes/AppUpdater.ts source/src/main/core/AppUpdater.ts -Force
+          Copy-Item bestiary-v530/fixes/ipc.ts source/src/shared/ipc.ts -Force
+          Copy-Item bestiary-v530/fixes/preload-index.ts source/src/preload/index.ts -Force
+          Copy-Item bestiary-v530/fixes/AccountService.ts source/src/main/core/AccountService.ts -Force
+          Copy-Item bestiary-v530/fixes/AccountScreen.tsx source/src/renderer/src/components/AccountScreen.tsx -Force
+          Copy-Item bestiary-v530/fixes/AccountScreen.css source/src/renderer/src/components/AccountScreen.css -Force
+          python bestiary-v514/patch_sync_profile.py
+          python bestiary-v515/patch_android_manifest.py
+          python bestiary-v515/patch_library.py
+          python bestiary-v520/patch_main.py
+          python bestiary-v520/patch_home.py
+          python bestiary-v521/patch_home.py
+          python bestiary-v530/patch_v530.py
+          python bestiary-v530/patch_bridge_package.py
+          python bestiary-v531/patch_v531.py
+          python bestiary-v532/patch_v532.py
+          python bestiary-v533/patch_v533.py
+          New-Item -ItemType Directory -Force .tmp-v533-ui | Out-Null
+          Copy-Item source/src/renderer/src/components/Home.tsx .tmp-v533-ui/Home.tsx -Force
+          Copy-Item source/src/renderer/src/components/AccountScreen.tsx .tmp-v533-ui/AccountScreen.tsx -Force
+          python bestiary-v534/patch_v534.py
+          Copy-Item .tmp-v533-ui/Home.tsx source/src/renderer/src/components/Home.tsx -Force
+          Copy-Item .tmp-v533-ui/AccountScreen.tsx source/src/renderer/src/components/AccountScreen.tsx -Force
+          python bestiary-v535/patch_v535.py
+          python bestiary-v536/patch_v536.py
+          Copy-Item bestiary-v537/KeybindPolicyService.ts source/src/main/core/KeybindPolicyService.ts -Force
+          python bestiary-v537/patch_v537.py
+          if($LASTEXITCODE -ne 0){throw '5.3.7 patch chain failed.'}
+      - name: Verify bridge baseline exists
+        shell: pwsh
+        run: |
+          $bridge=Get-Content source/src/main/core/OfficialLauncherBridge.ts -Raw
+          $main=Get-Content source/src/main/index.ts -Raw
+          if($bridge -notmatch 'launcher_profiles\.json' -or $bridge -notmatch 'bestiary-rebirth'){throw 'Bridge source missing.'}
+          if($main -notmatch 'officialLauncherBridge\.prepareAndOpen\(profileId\)'){throw 'Microsoft route missing.'}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-5.3.7-fast-source
+          path: |
+            source/src/main
+            source/src/shared
+            source/src/preload
+            source/src/renderer/src/App.tsx
+            source/src/renderer/src/store.ts
+          retention-days: 2
+          if-no-files-found: error
+      - name: Record fast inspect run
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m=[ordered]@{runId=[long]$env:GITHUB_RUN_ID;sourceCommit=$env:GITHUB_SHA;ready=$true;fast=$true}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='bestiary-v538/fast-inspect.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record Launcher 5.3.8 fast inspection [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
