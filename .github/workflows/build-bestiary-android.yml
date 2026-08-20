@@ -1,8 +1,8 @@
-name: Build Bestiary Launcher Android 1.0.0
+name: Build Bestiary Launcher Android 1.0.1
 
 on:
   push:
-    branches: [bestiary-android-v1-0-0]
+    branches: [bestiary-android-v1-0-1]
   workflow_dispatch:
 
 permissions:
@@ -90,20 +90,33 @@ jobs:
           python android-build/patch_bestiary_android_v100.py
           python android-build/patch_bestiary_android_skin.py
           python android-build/patch_bestiary_android_hardening.py
+          python android-build/patch_bestiary_android_runtime_v101.py
 
           BOOTSTRAP=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
           LAUNCHER=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java
+          OFFLINE=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryOfflineAccount.java
+          DOWNLOADER=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/tasks/MinecraftDownloader.java
+          SPINNER=amethyst/app_pojavlauncher/src/main/java/com/kdt/mcgui/mcAccountSpinner.java
           HOME=amethyst/app_pojavlauncher/src/main/res/layout/fragment_launcher.xml
           MANIFEST=amethyst/app_pojavlauncher/src/main/AndroidManifest.xml
 
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' amethyst/app_pojavlauncher/build.gradle
-          grep -q 'versionName "1.0.0"' amethyst/app_pojavlauncher/build.gradle
+          grep -q 'versionName "1.0.1"' amethyst/app_pojavlauncher/build.gradle
           grep -q 'BestiaryOfflineAccount.prompt(this)' "$LAUNCHER"
           ! grep -q 'Tools.swapFragment(this, SelectAuthFragment.class' "$LAUNCHER"
+          grep -q 'if(!isOnline)' "$DOWNLOADER"
+          grep -q 'ensureVanillaVersionMetadata()' "$BOOTSTRAP"
+          grep -q 'Manifest không khai báo profile android' "$BOOTSTRAP"
+          grep -q 'profile=android' "$BOOTSTRAP"
+          grep -q 'ProgressLayout.INSTALL_MODPACK' "$BOOTSTRAP"
           grep -q 'includesAndroidProfile(item)' "$BOOTSTRAP"
           grep -q 'BestiaryRendererPolicy.apply()' "$BOOTSTRAP"
           grep -q 'BestiaryAppUpdater.check(this)' "$LAUNCHER"
           grep -q 'installBundledSkinBridge(activity)' "$BOOTSTRAP"
+          grep -q 'input.setHint("VD: abc123")' "$OFFLINE"
+          ! grep -q 'activity.recreate()' "$OFFLINE"
+          grep -q 'bestiaryReloadAccounts()' "$SPINNER"
+          grep -q 'refreshBestiaryAccount()' "$LAUNCHER"
           grep -q 'bestiarySkinPicker' "$LAUNCHER"
           grep -q 'File đã chọn không phải PNG hợp lệ' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiarySkinManager.java
           grep -q 'final String savedVariant = variant;' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiarySkinManager.java
@@ -136,27 +149,27 @@ jobs:
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.0-debug.apk
-          sha256sum build-output/BestiaryLauncher-Android-1.0.0-debug.apk > build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.1-debug.apk
+          sha256sum build-output/BestiaryLauncher-Android-1.0.1-debug.apk > build-output/BestiaryLauncher-Android-1.0.1-debug-SHA256.txt
 
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -x "$AAPT"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.0-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
-          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
-          grep -q "versionName='1.0.0'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
-          grep -q "application-label:'Bestiary Launcher'" build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
-          unzip -l build-output/BestiaryLauncher-Android-1.0.0-debug.apk | grep -q 'assets/bestiary/bestiary-skin-bridge.jar'
-          unzip -l build-output/BestiaryLauncher-Android-1.0.0-debug.apk | grep -q 'bestiary_logo.png'
-          ls -lh build-output/BestiaryLauncher-Android-1.0.0-debug.apk
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.1-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.1-debug-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.1-debug-badging.txt
+          grep -q "versionName='1.0.1'" build-output/BestiaryLauncher-Android-1.0.1-debug-badging.txt
+          grep -q "application-label:'Bestiary Launcher'" build-output/BestiaryLauncher-Android-1.0.1-debug-badging.txt
+          unzip -l build-output/BestiaryLauncher-Android-1.0.1-debug.apk | grep -q 'assets/bestiary/bestiary-skin-bridge.jar'
+          unzip -l build-output/BestiaryLauncher-Android-1.0.1-debug.apk | grep -q 'bestiary_logo.png'
+          ls -lh build-output/BestiaryLauncher-Android-1.0.1-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.0-debug
+          name: BestiaryLauncher-Android-1.0.1-debug
           path: |
-            build-output/BestiaryLauncher-Android-1.0.0-debug.apk
-            build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt
-            build-output/BestiaryLauncher-Android-1.0.0-debug-badging.txt
+            build-output/BestiaryLauncher-Android-1.0.1-debug.apk
+            build-output/BestiaryLauncher-Android-1.0.1-debug-SHA256.txt
+            build-output/BestiaryLauncher-Android-1.0.1-debug-badging.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -167,13 +180,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          APK_SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt)"
+          APK_SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.1-debug-SHA256.txt)"
           [[ "$APK_SHA" =~ ^[a-f0-9]{64}$ ]]
           RESULT="$(python - <<'PY'
           import json, os
-          sha = open('build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt', encoding='utf-8').read().split()[0]
+          sha = open('build-output/BestiaryLauncher-Android-1.0.1-debug-SHA256.txt', encoding='utf-8').read().split()[0]
           print(json.dumps({
-              'version': '1.0.0',
+              'version': '1.0.1',
               'variant': 'debug',
               'sha256': sha,
               'sourceCommit': os.environ['GITHUB_SHA'],
@@ -189,7 +202,7 @@ jobs:
           EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
           python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
           import json, sys, os
-          payload = {'message': 'Record verified Bestiary Android CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          payload = {'message': 'Record verified Bestiary Android 1.0.1 CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
           if sys.argv[2]: payload['sha'] = sys.argv[2]
           print(json.dumps(payload))
           PY
@@ -205,7 +218,7 @@ jobs:
           RESULT="$(python - <<'PY'
           import json, os, datetime
           print(json.dumps({
-              'version': '1.0.0',
+              'version': '1.0.1',
               'sourceCommit': os.environ['GITHUB_SHA'],
               'branch': os.environ['GITHUB_REF_NAME'],
               'runId': int(os.environ['GITHUB_RUN_ID']),
@@ -219,7 +232,7 @@ jobs:
           EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
           python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
           import json, sys, os
-          payload = {'message': 'Record failed Bestiary Android CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          payload = {'message': 'Record failed Bestiary Android 1.0.1 CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
           if sys.argv[2]: payload['sha'] = sys.argv[2]
           print(json.dumps(payload))
           PY
