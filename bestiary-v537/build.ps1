@@ -66,7 +66,7 @@ function Wait-NoProcessesUnder([string]$Directory,[int]$Seconds=15) {
 }
 function Exercise-Launcher([string]$Executable,[string]$WorkingDirectory) {
   for($round=1;$round -le 3;$round++){
-    Write-Host "Lifecycle round $round: open -> close -> zero process tree"
+    Write-Host "Lifecycle round ${round}: open -> close -> zero process tree"
     $p=Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -ArgumentList @('--enable-logging','--disable-gpu') -PassThru
     $h=Wait-Window $p
     [void][Bestiary537Win32]::PostMessage($h,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)
@@ -90,7 +90,6 @@ Write-Host '=== Portable lifecycle verification ==='
 Exercise-Launcher $exe.FullName $unpacked
 
 Write-Host '=== Installed NSIS lifecycle verification ==='
-$before=@(Get-ChildItem $env:LOCALAPPDATA\Programs -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
 $installProc=Start-Process -FilePath $installer.FullName -ArgumentList '/S' -PassThru
 if(-not $installProc.WaitForExit(120000)){Stop-Process -Id $installProc.Id -Force -ErrorAction SilentlyContinue;throw 'Silent NSIS install timed out.'}
 Start-Sleep -Seconds 2
