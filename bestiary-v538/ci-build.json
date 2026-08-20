@@ -1,0 +1,14 @@
+{
+  "version": "5.3.8",
+  "sha256": "a0facf7ac1e300ed9a7a902f04196630b152941ce39a57fbac16e7a0919e36b0",
+  "sourceCommit": "cede86e5a3386fad0b5da9fc6c8ea04dedc07648",
+  "branch": "bestiary-launcher-v5-3-8-microsoft-runtime-sync",
+  "runId": 32382492251,
+  "microsoftRuntimeSettingsVerified": true,
+  "ramBridgeVerified": true,
+  "jvmBridgeVerified": true,
+  "credentialIsolationVerified": true,
+  "runtimeSmokeVerified": true,
+  "releasePublished": true,
+  "verified": true
+}
