@@ -1,0 +1,56 @@
+name: Publish verified Bestiary Pack Manager 6.3.2
+
+on:
+  push:
+    branches: [bestiary-manager-v6-3-2-options-source]
+    paths: [.github/workflows/publish-manager-v632-existing.yml]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download 32378724152 --repo "$GITHUB_REPOSITORY" -n BestiaryPackManager-Windows-6.3.2 -D publish
+          test -s publish/BestiaryPackManager-Setup-6.3.2.exe
+          ACTUAL="$(sha256sum publish/BestiaryPackManager-Setup-6.3.2.exe | awk '{print $1}')"
+          test "$ACTUAL" = 'e32cc443f6e1681476d1ff91ee1a3669c862f0aa1060a0692efa7789c10aaf21'
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG='manager-v6.3.2'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target 16faeae233d8087af5a6b936981e085ee7073422 --title 'Bestiary Pack Manager 6.3.2' --notes 'Sửa Keybind Manager: chọn hoặc kéo options.txt thật từ Minecraft instance, ghi nhớ nguồn cục bộ, tự quét lại key_* và bỏ tạo/xóa action thủ công.'
+          fi
+          gh release upload "$TAG" publish/BestiaryPackManager-Setup-6.3.2.exe publish/BestiaryPackManager-Setup-6.3.2-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/result.json <<'JSON'
+          {"version":"6.3.2","sha256":"e32cc443f6e1681476d1ff91ee1a3669c862f0aa1060a0692efa7789c10aaf21","releaseTag":"manager-v6.3.2","externalOptionsSourceVerified":true,"dragDropVerified":true,"manualKeyCreationRemoved":true,"releasePublished":true,"verified":true}
+          JSON
+          CONTENT="$(base64 -w0 /tmp/result.json)"
+          PATH_NAME='manager-v632/release-v632.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json, os, sys
+          p={'message':'Record published Manager 6.3.2 release [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
