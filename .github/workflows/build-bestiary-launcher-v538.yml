@@ -1,0 +1,147 @@
+name: Build Bestiary Launcher 5.3.8
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-3-8-microsoft-runtime-sync]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record CI run
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m=[ordered]@{version='5.3.8';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;status='running'}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='bestiary-v538/ci-running.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record Launcher 5.3.8 CI run [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and verify Launcher 5.3.8
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          try {
+            & ./bestiary-v538/build.ps1 *>&1 | Tee-Object -FilePath ci-v538.log
+            if($LASTEXITCODE -ne 0){throw "5.3.8 build returned $LASTEXITCODE"}
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v538.log -Append
+            throw
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.3.8
+          path: |
+            build-output-v538/BestiaryLauncher-Setup-5.3.8.exe
+            build-output-v538/BestiaryLauncher-Setup-5.3.8-SHA256.txt
+            build-output-v538/runtime-smoke-stdout.log
+            build-output-v538/runtime-smoke-stderr.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish CI failure
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail=if(Test-Path ci-v538.log){(Get-Content ci-v538.log -Tail 350)-join "`n"}else{'No build log.'}
+          $text="run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+          $path='bestiary-v538/ci-failure.txt';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$existing=$_}
+          $payload=@{message='Record Launcher 5.3.8 CI failure [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+  publish-release:
+    needs: build-windows
+    if: success() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.3.8
+          path: publish
+      - name: Verify release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s publish/BestiaryLauncher-Setup-5.3.8.exe
+          test -s publish/BestiaryLauncher-Setup-5.3.8-SHA256.txt
+          EXPECTED="$(awk '{print $1}' publish/BestiaryLauncher-Setup-5.3.8-SHA256.txt | tr '[:upper:]' '[:lower:]')"
+          ACTUAL="$(sha256sum publish/BestiaryLauncher-Setup-5.3.8.exe | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+      - name: Publish Launcher 5.3.8 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='launcher-v5.3.8'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher 5.3.8' --notes 'Microsoft mode giờ đồng bộ RAM và JVM flags của Bestiary vào installation Bestiary Rebirth trong Minecraft Launcher chính thức trước khi mở Launcher. Không sửa profile Minecraft khác và không chạm credential của Minecraft Launcher.'
+          fi
+          gh release upload "$TAG" publish/BestiaryLauncher-Setup-5.3.8.exe publish/BestiaryLauncher-Setup-5.3.8-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Publish verified build marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(awk '{print $1}' publish/BestiaryLauncher-Setup-5.3.8-SHA256.txt | tr '[:upper:]' '[:lower:]')"
+          python - "$HASH" <<'PY' > /tmp/marker.json
+          import json, os, sys
+          print(json.dumps({
+            'version':'5.3.8',
+            'sha256':sys.argv[1],
+            'sourceCommit':os.environ['GITHUB_SHA'],
+            'branch':os.environ['GITHUB_REF_NAME'],
+            'runId':int(os.environ['GITHUB_RUN_ID']),
+            'microsoftRuntimeSettingsVerified':True,
+            'ramBridgeVerified':True,
+            'jvmBridgeVerified':True,
+            'credentialIsolationVerified':True,
+            'runtimeSmokeVerified':True,
+            'releasePublished':True,
+            'verified':True,
+          }, ensure_ascii=False, indent=2))
+          PY
+          CONTENT="$(base64 -w0 /tmp/marker.json)"
+          P='bestiary-v538/ci-build.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json, os, sys
+          payload={'message':'Record verified Launcher 5.3.8 build [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: payload['sha']=sys.argv[2]
+          print(json.dumps(payload))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
