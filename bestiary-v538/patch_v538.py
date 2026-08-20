@@ -20,7 +20,7 @@ old = "const PROFILE_NAME = 'Bestiary Rebirth';\n"
 req(old in bridge, 'OfficialLauncherBridge profile marker missing')
 bridge = bridge.replace(
     old,
-    old + """
+    old + r"""
 const DEFAULT_BRIDGE_JVM_ARGS = [
   '-XX:+UseG1GC',
   '-XX:+ParallelRefProcEnabled',
@@ -47,10 +47,10 @@ function jvmArgumentKey(argument: string): string {
 }
 
 function quoteJavaArgument(argument: string): string {
-  if (!/[\\s\"]/u.test(argument)) return argument;
-  const escapedQuotes = argument.replace(/(\\\\*)\"/gu, '$1$1\\\"');
-  const escapedTail = escapedQuotes.replace(/(\\\\+)$/u, '$1$1');
-  return `\"${escapedTail}\"`;
+  if (!/[\s"]/u.test(argument)) return argument;
+  const escapedQuotes = argument.replace(/(\\*)"/gu, '$1$1\\"');
+  const escapedTail = escapedQuotes.replace(/(\\+)$/u, '$1$1');
+  return `"${escapedTail}"`;
 }
 
 export function buildOfficialLauncherJavaArgs(settings: LauncherSettings): string {
@@ -64,7 +64,7 @@ export function buildOfficialLauncherJavaArgs(settings: LauncherSettings): strin
   for (const raw of [...DEFAULT_BRIDGE_JVM_ARGS, ...(settings.generatedJvmArgs ?? [])]) {
     if (typeof raw !== 'string') continue;
     const argument = raw.trim();
-    if (!argument || argument.includes('\\0') || argument.length > 4096) continue;
+    if (!argument || argument.includes('\0') || argument.length > 4096) continue;
     if (/^-Xm[sx]/u.test(argument)) continue;
     ordered.set(jvmArgumentKey(argument), argument);
   }
@@ -131,12 +131,12 @@ main_path.write_text(main, encoding='utf-8')
 for rel in ['src/main/core/AccountService.ts', 'src/main/core/RemoteService.ts']:
     path = root / rel
     text = path.read_text(encoding='utf-8')
-    text = re.sub(r'BestiaryLauncher/5\\.3\\.\\d+', 'BestiaryLauncher/5.3.8', text)
+    text = re.sub(r'BestiaryLauncher/5\.3\.\d+', 'BestiaryLauncher/5.3.8', text)
     path.write_text(text, encoding='utf-8')
 
 app_path = root / 'src/renderer/src/App.tsx'
 app = app_path.read_text(encoding='utf-8')
-app = re.sub(r"currentVersion:\\s*'\\d+\\.\\d+\\.\\d+'", "currentVersion: '5.3.8'", app, count=1)
+app = re.sub(r"currentVersion:\s*'\d+\.\d+\.\d+'", "currentVersion: '5.3.8'", app, count=1)
 req("currentVersion: '5.3.8'" in app, 'Unable to bump App version to 5.3.8')
 app_path.write_text(app, encoding='utf-8')
 
