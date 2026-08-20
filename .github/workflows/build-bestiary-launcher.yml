@@ -2,7 +2,7 @@ name: Build Bestiary Launcher 5.3.6
 
 on:
   push:
-    branches: [bestiary-launcher-v5-1-0]
+    branches: [bestiary-launcher-v5-1-0, bestiary-launcher-v5-3-6-prod]
   workflow_dispatch:
 
 permissions:
