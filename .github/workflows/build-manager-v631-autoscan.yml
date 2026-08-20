@@ -23,6 +23,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Record CI run
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m=[ordered]@{version='6.3.2';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;status='running'}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v632/ci-running.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record Manager 6.3.2 CI run [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
       - name: Reconstruct Manager source
         shell: pwsh
         run: |
@@ -143,8 +155,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.2-SHA256.txt -Raw;$hash=($line -split '\s+')[0]
-          $m=[ordered]@{version='6.3.2';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;lifecycleVerified=$true;keybindManagerVerified=$true;externalOptionsSourceVerified=$true;dragDropVerified=$true;manualKeyCreationRemoved=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $m=[ordered]@{version='6.3.2';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;lifecycleVerified=$true;keybindManagerVerified=$true;externalOptionsSourceVerified=$true;dragDropVerified=$true;manualKeyCreationRemoved=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v632/ci-build.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
           $payload=@{message='Record verified Manager 6.3.2 options source build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - name: Publish failure marker
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m=[ordered]@{version='6.3.2';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;verified=$false;status='failed'}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v632/ci-failure.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record failed Manager 6.3.2 CI [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
