@@ -83,9 +83,10 @@ jobs:
         run: |
           chmod +x scripts/languagelist_updater.sh
           bash scripts/languagelist_updater.sh
-      - name: Build debug APK
+      - name: Build updater-compatible APK
         working-directory: amethyst
         run: |
+          set -euo pipefail
           chmod +x gradlew
           ./gradlew :jre_lwjgl3glfw:build :app_pojavlauncher:assembleDebug --stacktrace --no-daemon
       - name: Verify APK
@@ -93,31 +94,48 @@ jobs:
           set -euo pipefail
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.4-debug.apk
-          sha256sum build-output/BestiaryLauncher-Android-1.0.4-debug.apk > build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.4.apk
+          sha256sum build-output/BestiaryLauncher-Android-1.0.4.apk > build-output/BestiaryLauncher-Android-1.0.4-SHA256.txt
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.4-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.4-debug-badging.txt
-          grep -q "versionName='1.0.4'" build-output/BestiaryLauncher-Android-1.0.4-debug-badging.txt
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.4.apk | tee build-output/BestiaryLauncher-Android-1.0.4-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.4-badging.txt
+          grep -q "versionName='1.0.4'" build-output/BestiaryLauncher-Android-1.0.4-badging.txt
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.4.apk | tee build-output/BestiaryLauncher-Android-1.0.4-signing.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.4-debug
+          name: BestiaryLauncher-Android-1.0.4
           path: build-output/*
           retention-days: 7
+          if-no-files-found: error
+      - name: Publish Android 1.0.4 release
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG='android-v1.0.4'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher Android 1.0.4' --notes 'Android 1.0.4: adaptive RAM/resolution defaults, G1 tuning, renderer/mobile performance defaults và APK auto-updater. Giữ package/signing lineage của các bản Bestiary Android hiện tại để cập nhật tại chỗ.'
+          fi
+          gh release upload "$TAG" build-output/BestiaryLauncher-Android-1.0.4.apk build-output/BestiaryLauncher-Android-1.0.4-SHA256.txt build-output/BestiaryLauncher-Android-1.0.4-signing.txt --repo "$GITHUB_REPOSITORY" --clobber
       - name: Publish verified Android CI manifest
         if: success() && github.event_name == 'push'
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
           set -euo pipefail
-          SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt)"
           python - <<'PY' > /tmp/result.json
           import json, os
-          sha=open('build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt').read().split()[0]
-          print(json.dumps({'version':'1.0.4','variant':'debug','sha256':sha,'sourceCommit':os.environ['GITHUB_SHA'],'branch':os.environ['GITHUB_REF_NAME'],'runId':int(os.environ['GITHUB_RUN_ID']),'upstreamCommit':'360d708262ff703d9b52782d20cd348410a33df5','verified':True}, indent=2))
+          sha=open('build-output/BestiaryLauncher-Android-1.0.4-SHA256.txt').read().split()[0]
+          print(json.dumps({'version':'1.0.4','variant':'updater-compatible','sha256':sha,'sourceCommit':os.environ['GITHUB_SHA'],'branch':os.environ['GITHUB_REF_NAME'],'runId':int(os.environ['GITHUB_RUN_ID']),'upstreamCommit':'360d708262ff703d9b52782d20cd348410a33df5','releasePublished':True,'verified':True}, indent=2))
           PY
           CONTENT="$(base64 -w0 /tmp/result.json)"
-          PATH_NAME="android-build/ci/${GITHUB_SHA}.json"
-          python - "$CONTENT" <<'PY' > /tmp/payload.json
+          PATH_NAME="android-build/ci/latest-v104.json"
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
           import json,sys,os
-          print(json.dumps({'message':'Record verified Bestiary Android 1.0.4 CI result [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}))
+          p={'message':'Record published Bestiary Android 1.0.4 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
           PY
           gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
