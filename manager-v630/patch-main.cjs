@@ -7,7 +7,7 @@ req(s.includes('let mainWindow: BrowserWindow | null = null;'), 'mainWindow decl
 if (!s.includes('app.requestSingleInstanceLock()')) {
   s = s.replace(
     'let mainWindow: BrowserWindow | null = null;',
-    `let mainWindow: BrowserWindow | null = null;\nconst gotSingleInstanceLock = app.requestSingleInstanceLock();\nif (!gotSingleInstanceLock) app.quit();`,
+    `let mainWindow: BrowserWindow | null = null;\nconst gotSingleInstanceLock = app.requestSingleInstanceLock();\nif (!gotSingleInstanceLock) app.exit(0);`,
   );
 }
 
@@ -35,6 +35,7 @@ if (s.includes(activateOld)) {
 }
 
 req(s.includes('app.requestSingleInstanceLock()'), 'single-instance lock missing');
+req(s.includes('if (!gotSingleInstanceLock) app.exit(0);'), 'rejected instance must exit immediately');
 req(s.includes("app.on('second-instance'"), 'second-instance handler missing');
 req(s.includes('mainWindow.isDestroyed()') && s.includes('mainWindow.restore()') && s.includes('mainWindow.show()') && s.includes('mainWindow.focus()'), 'window restore contract missing');
 req(s.includes("app.on('window-all-closed'"), 'window-all-closed handler missing');
