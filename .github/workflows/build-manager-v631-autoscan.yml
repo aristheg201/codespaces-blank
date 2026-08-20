@@ -1,8 +1,8 @@
-name: Build Bestiary Pack Manager 6.3.1 Autoscan
+name: Build Bestiary Pack Manager 6.3.2 Options Source
 
 on:
   push:
-    branches: [bestiary-manager-v6-3-1-keybind-autoscan]
+    branches: [bestiary-manager-v6-3-2-options-source]
   workflow_dispatch:
 
 permissions:
@@ -67,8 +67,10 @@ jobs:
           node manager-v630/patch-distribution.cjs
           node manager-v630/patch-ui-fixes.cjs
           node manager-v630/patch-keybind.cjs
+          Copy-Item manager-v632/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
+          node manager-v632/patch-v632.cjs
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
-          $pkg.version='6.3.1';$pkg.author='SVFrame Team Studio';$pkg|ConvertTo-Json -Depth 20|Set-Content manager/package.json -Encoding UTF8
+          $pkg.version='6.3.2';$pkg.author='SVFrame Team Studio';$pkg|ConvertTo-Json -Depth 20|Set-Content manager/package.json -Encoding UTF8
           New-Item -ItemType Directory -Force manager/src/renderer/public|Out-Null
           Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
           New-Item -ItemType Directory -Force manager/resources/gh|Out-Null
@@ -78,16 +80,19 @@ jobs:
           $source=[System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
           try{$bitmap=New-Object System.Drawing.Bitmap 512,512;try{$graphics=[System.Drawing.Graphics]::FromImage($bitmap);try{$graphics.Clear([System.Drawing.Color]::Transparent);$graphics.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic;$graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality;$scale=[Math]::Min(440.0/$source.Width,440.0/$source.Height);$w=[int]($source.Width*$scale);$h=[int]($source.Height*$scale);$graphics.DrawImage($source,[int]((512-$w)/2),[int]((512-$h)/2),$w,$h)}finally{$graphics.Dispose()};$bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'),[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$source.Dispose()}
 
-      - name: Verify autoscan contracts
+      - name: Verify options source contracts
         shell: pwsh
         run: |
           $keybind=Get-Content manager/src/main/services/KeybindPolicyService.ts -Raw
           $main=Get-Content manager/src/main/index.ts -Raw
           $app=Get-Content manager/src/renderer/src/App.tsx -Raw
-          if($keybind -notmatch 'scanOptions' -or $keybind -notmatch 'options\.txt' -or $keybind -notmatch "old\?\.mode === 'locked' \? old\.key : optionsKey"){throw 'options.txt autoscan contract missing.'}
-          if($keybind -notmatch 'sameRules' -or $keybind -notmatch 'bestiary-keybinds\.json'){throw 'keybind persistence contract missing.'}
-          if($main -notmatch "keybind:get" -or $main -notmatch "keybind:save" -or $main -notmatch "keybind:import-options"){throw 'Keybind IPC missing.'}
-          if($app -notmatch 'KEYBINDS' -or $app -notmatch 'DEFAULT' -or $app -notmatch 'LOCKED'){throw 'Keybind UI missing.'}
+          $types=Get-Content manager/src/shared/types.ts -Raw
+          if($keybind -notmatch 'keybind-source\.json' -or $keybind -notmatch 'resolveSource' -or $keybind -notmatch 'sourceAvailable'){throw 'persistent options source contract missing.'}
+          if($keybind -notmatch "old\?\.mode==='locked'\?old\.key:optionsKey"){throw 'DEFAULT/LOCKED merge contract missing.'}
+          if($main -notmatch "keybind:choose-options" -or $main -notmatch "keybind:import-options"){throw 'options picker IPC missing.'}
+          if($app -notmatch 'CHỌN OPTIONS.TXT' -or $app -notmatch 'QUÉT LẠI' -or $app -notmatch 'onDrop'){throw 'options source UI missing.'}
+          if($app -match '\+ THÊM KEYBIND' -or $app -match '>GỠ<'){throw 'manual keybind creation/removal must not exist.'}
+          if($types -notmatch 'sourcePath\?:string' -or $types -notmatch 'chooseOptionsFile'){throw 'options source API types missing.'}
           if($main -notmatch 'app\.exit\(0\)' -or $main -notmatch "app\.on\('second-instance'"){throw 'Lifecycle hardening missing.'}
 
       - name: Install dependencies
@@ -103,34 +108,32 @@ jobs:
       - name: Verify installer
         shell: pwsh
         run: |
-          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.1.exe -ErrorAction Stop
+          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.2.exe -ErrorAction Stop
           if($installer.Length -lt 1000000){throw 'Installer too small.'}
           $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt -Encoding ascii
+          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.2-SHA256.txt -Encoding ascii
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.3.1
+          name: BestiaryPackManager-Windows-6.3.2
           path: |
-            manager/release/BestiaryPackManager-Setup-6.3.1.exe
-            manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.3.2.exe
+            manager/release/BestiaryPackManager-Setup-6.3.2-SHA256.txt
           retention-days: 7
           if-no-files-found: error
 
-      - name: Publish Manager 6.3.1 release
+      - name: Publish Manager 6.3.2 release
         if: success() && github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $tag='manager-v6.3.1'
-          $exe='manager/release/BestiaryPackManager-Setup-6.3.1.exe'
-          $sha='manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt'
+          $tag='manager-v6.3.2'
+          $exe='manager/release/BestiaryPackManager-Setup-6.3.2.exe'
+          $sha='manager/release/BestiaryPackManager-Setup-6.3.2-SHA256.txt'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if($LASTEXITCODE -ne 0){
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.1' --notes 'Manager 6.3.1: tự đọc keybind trực tiếp từ options.txt, giữ DEFAULT/LOCKED, không đè các option Minecraft không liên quan, giữ mod audit và lifecycle hardening.'
-          }
+          if($LASTEXITCODE -ne 0){gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.2' --notes 'Sửa Keybind Manager: chọn/kéo options.txt thật từ Minecraft instance, ghi nhớ nguồn cục bộ, tự quét lại key_* và bỏ tạo/xóa action thủ công.'}
           gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
 
       - name: Publish verified marker
@@ -139,9 +142,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt -Raw;$hash=($line -split '\s+')[0]
-          $m=[ordered]@{version='6.3.1';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;modAuditVerified=$true;lifecycleVerified=$true;keybindManagerVerified=$true;keybindAutoscanVerified=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
-          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v630/ci-keybind-autoscan.json';$old=''
+          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.2-SHA256.txt -Raw;$hash=($line -split '\s+')[0]
+          $m=[ordered]@{version='6.3.2';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;lifecycleVerified=$true;keybindManagerVerified=$true;externalOptionsSourceVerified=$true;dragDropVerified=$true;manualKeyCreationRemoved=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v632/ci-build.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
-          $payload=@{message='Record verified Manager 6.3.1 autoscan build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          $payload=@{message='Record verified Manager 6.3.2 options source build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
