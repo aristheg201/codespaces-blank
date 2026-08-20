@@ -1,0 +1,10 @@
+{
+  "version": "1.0.4",
+  "variant": "debug",
+  "sha256": "528a330e84b1d0419a4f996692d87c6032aa4190e14542afe5cae40801241f97",
+  "sourceCommit": "76b654bc48d81f3ede7a8bf40554a4525db244ff",
+  "branch": "bestiary-android-v1-0-4-performance-updater",
+  "runId": 32373233037,
+  "upstreamCommit": "360d708262ff703d9b52782d20cd348410a33df5",
+  "verified": true
+}
