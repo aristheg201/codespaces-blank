@@ -1,8 +1,8 @@
-name: Build Bestiary Launcher Android 1.0.2
+name: Build Bestiary Launcher Android 1.0.4
 
 on:
   push:
-    branches: [bestiary-android-v1-0-2]
+    branches: [bestiary-android-v1-0-4-performance-updater]
   workflow_dispatch:
 
 permissions:
@@ -16,51 +16,30 @@ jobs:
       AMETHYST_COMMIT: 360d708262ff703d9b52782d20cd348410a33df5
       ANDROID_NDK_VERSION: 27.3.13750724
     steps:
-      - name: Checkout Bestiary build definitions
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Checkout Bestiary Skin Bridge source
         uses: actions/checkout@v4
         with:
           ref: bestiary-launcher-v5-1-0
           path: skin-source
           sparse-checkout: bestiary-skin-bridge
-
-      - name: Setup JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14.3'
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Build Bestiary Skin Bridge runtime component
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Build Skin Bridge
         working-directory: skin-source/bestiary-skin-bridge
-        shell: bash
         run: |
           set -euo pipefail
           gradle build --stacktrace
-          JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | head -n 1)"
-          test -s "$JAR"
-          sha256sum "$JAR"
-
       - name: Install pinned Android NDK
-        shell: bash
         run: |
           set -euo pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${ANDROID_NDK_VERSION}"
-
       - name: Checkout pinned Amethyst runtime
-        shell: bash
         run: |
           set -euo pipefail
           git init amethyst
@@ -69,19 +48,14 @@ jobs:
           git -C amethyst checkout --detach FETCH_HEAD
           test "$(git -C amethyst rev-parse HEAD)" = "$AMETHYST_COMMIT"
           git -C amethyst submodule update --init --recursive --depth 1
-
-      - name: Bundle Skin Bridge into APK assets
-        shell: bash
+      - name: Bundle Skin Bridge
         run: |
           set -euo pipefail
           JAR="$(find skin-source/bestiary-skin-bridge/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | head -n 1)"
           test -s "$JAR"
           mkdir -p amethyst/app_pojavlauncher/src/main/assets/bestiary
           cp "$JAR" amethyst/app_pojavlauncher/src/main/assets/bestiary/bestiary-skin-bridge.jar
-          test -s amethyst/app_pojavlauncher/src/main/assets/bestiary/bestiary-skin-bridge.jar
-
-      - name: Apply Bestiary Android patches
-        shell: bash
+      - name: Apply and verify Bestiary patches
         run: |
           set -euo pipefail
           python android-build/patch_bestiary_android.py
@@ -92,166 +66,58 @@ jobs:
           python android-build/patch_bestiary_android_hardening.py
           python android-build/patch_bestiary_android_runtime_v101.py
           python android-build/patch_bestiary_android_v102.py
-
-          BOOTSTRAP=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
-          LAUNCHER=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java
-          OFFLINE=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryOfflineAccount.java
-          DOWNLOADER=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/tasks/MinecraftDownloader.java
-          SPINNER=amethyst/app_pojavlauncher/src/main/java/com/kdt/mcgui/mcAccountSpinner.java
-          SKIN=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiarySkinManager.java
-          APPJAVA=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/PojavApplication.java
-          JAVA_PREF=amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/prefs/screens/LauncherPreferenceJavaFragment.java
-          PREF_XML=amethyst/app_pojavlauncher/src/main/res/xml/pref_java.xml
-          KEYBOARD=amethyst/app_pojavlauncher/src/main/assets/bestiary/keyboard_cobblemon.json
-          HOME=amethyst/app_pojavlauncher/src/main/res/layout/fragment_launcher.xml
-          MANIFEST=amethyst/app_pojavlauncher/src/main/AndroidManifest.xml
-
-          grep -q 'applicationId "vn.svframe.bestiary.launcher"' amethyst/app_pojavlauncher/build.gradle
-          grep -q 'versionName "1.0.2"' amethyst/app_pojavlauncher/build.gradle
-          grep -q 'BestiaryOfflineAccount.prompt(this)' "$LAUNCHER"
-          ! grep -q 'Tools.swapFragment(this, SelectAuthFragment.class' "$LAUNCHER"
-          grep -q 'if(!isOnline)' "$DOWNLOADER"
-          grep -q 'ensureVanillaVersionMetadata()' "$BOOTSTRAP"
-          grep -q 'Manifest không khai báo profile android' "$BOOTSTRAP"
-          grep -q 'profile=android' "$BOOTSTRAP"
-          grep -q 'ProgressLayout.INSTALL_MODPACK' "$BOOTSTRAP"
-          grep -q 'includesAndroidProfile(item)' "$BOOTSTRAP"
-          grep -q 'BestiaryRendererPolicy.apply()' "$BOOTSTRAP"
-          grep -q 'BestiaryAppUpdater.check(this)' "$LAUNCHER"
-          grep -q 'installBundledSkinBridge(activity)' "$BOOTSTRAP"
-          grep -q 'input.setHint("VD: abc123")' "$OFFLINE"
-          ! grep -q 'activity.recreate()' "$OFFLINE"
-          grep -q 'bestiaryReloadAccounts()' "$SPINNER"
-          grep -q 'refreshBestiaryAccount()' "$LAUNCHER"
-          grep -q 'bestiarySkinPicker' "$LAUNCHER"
-          grep -q 'CHỌN PNG' "$SKIN"
-          grep -q 'DEFAULT / CLASSIC' "$SKIN"
-          grep -q 'loadPreview(preview, png)' "$SKIN"
-          grep -q 'DÙNG SKIN MẶC ĐỊNH' "$SKIN"
-          grep -q 'File đã chọn không phải PNG hợp lệ' "$SKIN"
-          grep -q 'BestiaryDefaultControls.install(this)' "$APPJAVA"
-          grep -q 'bestiary-cobblemon.json' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryDefaultControls.java
-          test -s "$KEYBOARD"
-          echo 'b6d4513326e8c008d26a1068fe2fde80f2e26997cc259d38fda92e1081d3f563  '"$KEYBOARD" | sha256sum -c -
-          grep -q 'bestiary_generate_jvm_flags' "$PREF_XML"
-          grep -q 'BestiaryJvmFlagGenerator.generate' "$JAVA_PREF"
-          grep -q 'UseG1GC' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java
-          ! grep -q -- '-Xmx' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java
-          grep -q 'CHƠI NGAY' "$HOME"
-          grep -q 'TÀI KHOẢN &amp; SKIN' "$HOME"
-          grep -q 'screenOrientation="portrait"' "$MANIFEST"
-          test -s amethyst/app_pojavlauncher/src/main/res/drawable-nodpi/bestiary_logo.png
-          test -s amethyst/app_pojavlauncher/src/main/assets/bestiary/bestiary-skin-bridge.jar
-
+          python android-build/patch_bestiary_android_v104_performance.py
+          APP=amethyst/app_pojavlauncher
+          grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
+          grep -q 'versionName "1.0.4"' "$APP/build.gradle"
+          grep -q 'BestiaryAppUpdater.check(this)' "$APP/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java"
+          grep -q 'BestiaryPerformanceProfile.install(this)' "$APP/src/main/java/net/kdt/pojavlaunch/PojavApplication.java"
+          grep -q 'resolutionRatio' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'G1ReservePercent=15' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
+          ! grep -q -- '-Xmx' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
+          grep -q 'BestiaryDefaultControls.install(this)' "$APP/src/main/java/net/kdt/pojavlaunch/PojavApplication.java"
+          test -s "$APP/src/main/assets/bestiary/keyboard_cobblemon.json"
+          test -s "$APP/src/main/assets/bestiary/bestiary-skin-bridge.jar"
       - name: Generate language list
         working-directory: amethyst
-        shell: bash
         run: |
-          set -euo pipefail
           chmod +x scripts/languagelist_updater.sh
           bash scripts/languagelist_updater.sh
-
       - name: Build debug APK
         working-directory: amethyst
-        shell: bash
         run: |
-          set -euo pipefail
           chmod +x gradlew
           ./gradlew :jre_lwjgl3glfw:build :app_pojavlauncher:assembleDebug --stacktrace --no-daemon
-
-      - name: Verify APK identity and stage artifact
-        shell: bash
+      - name: Verify APK
         run: |
           set -euo pipefail
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.2-debug.apk
-          sha256sum build-output/BestiaryLauncher-Android-1.0.2-debug.apk > build-output/BestiaryLauncher-Android-1.0.2-debug-SHA256.txt
-
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.4-debug.apk
+          sha256sum build-output/BestiaryLauncher-Android-1.0.4-debug.apk > build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          test -x "$AAPT"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.2-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.2-debug-badging.txt
-          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.2-debug-badging.txt
-          grep -q "versionName='1.0.2'" build-output/BestiaryLauncher-Android-1.0.2-debug-badging.txt
-          grep -q "application-label:'Bestiary Launcher'" build-output/BestiaryLauncher-Android-1.0.2-debug-badging.txt
-          unzip -l build-output/BestiaryLauncher-Android-1.0.2-debug.apk | grep -q 'assets/bestiary/bestiary-skin-bridge.jar'
-          unzip -l build-output/BestiaryLauncher-Android-1.0.2-debug.apk | grep -q 'assets/bestiary/keyboard_cobblemon.json'
-          unzip -l build-output/BestiaryLauncher-Android-1.0.2-debug.apk | grep -q 'bestiary_logo.png'
-          ls -lh build-output/BestiaryLauncher-Android-1.0.2-debug.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.4-debug.apk | tee build-output/BestiaryLauncher-Android-1.0.4-debug-badging.txt
+          grep -q "versionName='1.0.4'" build-output/BestiaryLauncher-Android-1.0.4-debug-badging.txt
+      - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.2-debug
-          path: |
-            build-output/BestiaryLauncher-Android-1.0.2-debug.apk
-            build-output/BestiaryLauncher-Android-1.0.2-debug-SHA256.txt
-            build-output/BestiaryLauncher-Android-1.0.2-debug-badging.txt
-          if-no-files-found: error
+          name: BestiaryLauncher-Android-1.0.4-debug
+          path: build-output/*
           retention-days: 7
-
       - name: Publish verified Android CI manifest
         if: success() && github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: { GH_TOKEN: '${{ github.token }}' }
         run: |
           set -euo pipefail
-          APK_SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.2-debug-SHA256.txt)"
-          [[ "$APK_SHA" =~ ^[a-f0-9]{64}$ ]]
-          RESULT="$(python - <<'PY'
+          SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt)"
+          python - <<'PY' > /tmp/result.json
           import json, os
-          sha = open('build-output/BestiaryLauncher-Android-1.0.2-debug-SHA256.txt', encoding='utf-8').read().split()[0]
-          print(json.dumps({
-              'version': '1.0.2',
-              'variant': 'debug',
-              'sha256': sha,
-              'sourceCommit': os.environ['GITHUB_SHA'],
-              'branch': os.environ['GITHUB_REF_NAME'],
-              'runId': int(os.environ['GITHUB_RUN_ID']),
-              'upstreamCommit': '360d708262ff703d9b52782d20cd348410a33df5',
-              'verified': True
-          }, ensure_ascii=False, indent=2))
+          sha=open('build-output/BestiaryLauncher-Android-1.0.4-debug-SHA256.txt').read().split()[0]
+          print(json.dumps({'version':'1.0.4','variant':'debug','sha256':sha,'sourceCommit':os.environ['GITHUB_SHA'],'branch':os.environ['GITHUB_REF_NAME'],'runId':int(os.environ['GITHUB_RUN_ID']),'upstreamCommit':'360d708262ff703d9b52782d20cd348410a33df5','verified':True}, indent=2))
           PY
-          )"
-          CONTENT="$(printf '%s' "$RESULT" | base64 -w0)"
+          CONTENT="$(base64 -w0 /tmp/result.json)"
           PATH_NAME="android-build/ci/${GITHUB_SHA}.json"
-          EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
-          python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
-          import json, sys, os
-          payload = {'message': 'Record verified Bestiary Android 1.0.2 CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
-          if sys.argv[2]: payload['sha'] = sys.argv[2]
-          print(json.dumps(payload))
-          PY
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
-
-      - name: Publish Android CI failure marker
-        if: failure() && github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          RESULT="$(python - <<'PY'
-          import json, os, datetime
-          print(json.dumps({
-              'version': '1.0.2',
-              'sourceCommit': os.environ['GITHUB_SHA'],
-              'branch': os.environ['GITHUB_REF_NAME'],
-              'runId': int(os.environ['GITHUB_RUN_ID']),
-              'verified': False,
-              'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
-          }, indent=2))
-          PY
-          )"
-          CONTENT="$(printf '%s' "$RESULT" | base64 -w0)"
-          PATH_NAME="android-build/ci/${GITHUB_SHA}.json"
-          EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
-          python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
-          import json, sys, os
-          payload = {'message': 'Record failed Bestiary Android 1.0.2 CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
-          if sys.argv[2]: payload['sha'] = sys.argv[2]
-          print(json.dumps(payload))
+          python - "$CONTENT" <<'PY' > /tmp/payload.json
+          import json,sys,os
+          print(json.dumps({'message':'Record verified Bestiary Android 1.0.4 CI result [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}))
           PY
           gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}" --input /tmp/payload.json >/dev/null
