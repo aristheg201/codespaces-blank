@@ -1,0 +1,69 @@
+name: Publish verified Bestiary Android 1.0.4
+
+on:
+  push:
+    branches: [bestiary-android-v1-0-4-performance-updater]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download already verified CI artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download 32373233037 --repo "$GITHUB_REPOSITORY" -n BestiaryLauncher-Android-1.0.4-debug -D publish
+          test -s publish/BestiaryLauncher-Android-1.0.4-debug.apk
+          ACTUAL="$(sha256sum publish/BestiaryLauncher-Android-1.0.4-debug.apk | awk '{print $1}')"
+          EXPECTED='528a330e84b1d0419a4f996692d87c6032aa4190e14542afe5cae40801241f97'
+          test "$ACTUAL" = "$EXPECTED"
+          mv publish/BestiaryLauncher-Android-1.0.4-debug.apk publish/BestiaryLauncher-Android-1.0.4.apk
+          printf '%s  %s\n' "$ACTUAL" 'BestiaryLauncher-Android-1.0.4.apk' > publish/BestiaryLauncher-Android-1.0.4-SHA256.txt
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG='android-v1.0.4'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher Android 1.0.4' --notes 'Android 1.0.4: adaptive RAM/resolution defaults, G1 tuning, mobile renderer defaults và auto-updater. Giữ package/signing lineage của Bestiary Android 1.0.x để cập nhật tại chỗ.'
+          fi
+          gh release upload "$TAG" publish/BestiaryLauncher-Android-1.0.4.apk publish/BestiaryLauncher-Android-1.0.4-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/result.json
+          import json, os
+          print(json.dumps({
+            'version':'1.0.4',
+            'variant':'updater-compatible',
+            'sha256':'528a330e84b1d0419a4f996692d87c6032aa4190e14542afe5cae40801241f97',
+            'artifactRunId':32373233037,
+            'branch':os.environ['GITHUB_REF_NAME'],
+            'publishRunId':int(os.environ['GITHUB_RUN_ID']),
+            'releaseTag':'android-v1.0.4',
+            'releasePublished':True,
+            'verified':True
+          }, indent=2))
+          PY
+          CONTENT="$(base64 -w0 /tmp/result.json)"
+          P='android-build/ci/latest-v104.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json,sys,os
+          p={'message':'Record published Bestiary Android 1.0.4 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
