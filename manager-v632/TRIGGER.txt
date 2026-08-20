@@ -1,0 +1,1 @@
+Manager 6.3.2 options source release build
