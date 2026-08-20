@@ -35,3 +35,19 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Pack Manager 6.3.1' --notes 'Manager 6.3.1: tự đọc keybind từ options.txt, giữ DEFAULT/LOCKED và không đè các option Minecraft không liên quan.'
           fi
           gh release upload "$TAG" publish/BestiaryPackManager-Setup-6.3.1.exe publish/BestiaryPackManager-Setup-6.3.1-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"version":"6.3.1","sha256":"88953360b35da2afeb43585ac0fec66f9314663efaf9400f8857c089e2df186e","releaseTag":"manager-v6.3.1","releasePublished":true,"verified":true}' > /tmp/release.json
+          CONTENT="$(base64 -w0 /tmp/release.json)"
+          P='manager-v630/release-v631.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json,sys,os
+          p={'message':'Record published Manager 6.3.1 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          if sys.argv[2]: p['sha']=sys.argv[2]
+          print(json.dumps(p))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
