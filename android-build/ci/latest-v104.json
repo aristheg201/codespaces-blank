@@ -2,10 +2,10 @@
   "version": "1.0.4",
   "variant": "updater-compatible",
   "sha256": "528a330e84b1d0419a4f996692d87c6032aa4190e14542afe5cae40801241f97",
-  "artifactRunId": 32373233037,
+  "sourceCommit": "2f40d51b383b13623e04a52d257154b16121b2a1",
   "branch": "bestiary-android-v1-0-4-performance-updater",
-  "publishRunId": 32376476427,
-  "releaseTag": "android-v1.0.4",
+  "runId": 32376410839,
+  "upstreamCommit": "360d708262ff703d9b52782d20cd348410a33df5",
   "releasePublished": true,
   "verified": true
 }
