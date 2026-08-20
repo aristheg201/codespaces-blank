@@ -1,0 +1,42 @@
+name: Debug Bestiary Launcher Source
+
+on:
+  push:
+    branches:
+      - bestiary-launcher-v5-0-2-source2
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dump-source:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force source | Out-Null
+          $sourcePartNames = @(
+            "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
+          )
+          $sourceB64 = ($sourcePartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD/source.tar.gz", [Convert]::FromBase64String($sourceB64))
+          tar -xzf "$PWD/source.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract source archive" }
+          Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
+
+      - name: Upload reconstructed source
+        uses: actions/upload-artifact@v4
+        with:
+          name: bestiary-launcher-source-debug
+          path: source
+          if-no-files-found: error
+          retention-days: 1
