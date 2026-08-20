@@ -117,6 +117,22 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Publish Manager 6.3.1 release
+        if: success() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $tag='manager-v6.3.1'
+          $exe='manager/release/BestiaryPackManager-Setup-6.3.1.exe'
+          $sha='manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if($LASTEXITCODE -ne 0){
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.1' --notes 'Manager 6.3.1: tự đọc keybind trực tiếp từ options.txt, giữ DEFAULT/LOCKED, không đè các option Minecraft không liên quan, giữ mod audit và lifecycle hardening.'
+          }
+          gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
+
       - name: Publish verified marker
         if: success() && github.event_name == 'push'
         shell: pwsh
@@ -124,7 +140,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.1-SHA256.txt -Raw;$hash=($line -split '\s+')[0]
-          $m=[ordered]@{version='6.3.1';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;modAuditVerified=$true;lifecycleVerified=$true;keybindManagerVerified=$true;keybindAutoscanVerified=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $m=[ordered]@{version='6.3.1';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;modAuditVerified=$true;lifecycleVerified=$true;keybindManagerVerified=$true;keybindAutoscanVerified=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v630/ci-keybind-autoscan.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
           $payload=@{message='Record verified Manager 6.3.1 autoscan build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
