@@ -74,7 +74,9 @@ jobs:
           New-Item -ItemType Directory -Force manager/resources/gh|Out-Null
           Copy-Item (Get-Command gh).Source manager/resources/gh/gh.exe -Force
           New-Item -ItemType Directory -Force manager/build|Out-Null
-          Copy-Item manager/resources/logo.png manager/build/icon.png -Force
+          Add-Type -AssemblyName System.Drawing
+          $source=[System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
+          try{$bitmap=New-Object System.Drawing.Bitmap 512,512;try{$graphics=[System.Drawing.Graphics]::FromImage($bitmap);try{$graphics.Clear([System.Drawing.Color]::Transparent);$graphics.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic;$graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality;$scale=[Math]::Min(440.0/$source.Width,440.0/$source.Height);$w=[int]($source.Width*$scale);$h=[int]($source.Height*$scale);$graphics.DrawImage($source,[int]((512-$w)/2),[int]((512-$h)/2),$w,$h)}finally{$graphics.Dispose()};$bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'),[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$source.Dispose()}
 
       - name: Verify keybind and lifecycle contracts
         shell: pwsh
@@ -129,4 +131,16 @@ jobs:
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='manager-v630/ci-keybind.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
           $payload=@{message='Record verified Manager 6.3 keybind build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - name: Publish keybind failure marker
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $text="run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME"
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text));$path='manager-v630/ci-keybind-failure.txt';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record Manager 6.3 keybind CI failure [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
