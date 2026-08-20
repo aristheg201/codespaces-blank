@@ -48,7 +48,15 @@ jobs:
 
       - name: Build and runtime-test Launcher 5.3.4
         shell: pwsh
-        run: ./bestiary-v534/build.ps1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            & ./bestiary-v534/build.ps1 *>&1 | Tee-Object -FilePath ci-v534.log
+            if ($LASTEXITCODE -ne 0) { throw "5.3.4 build returned exit code $LASTEXITCODE" }
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v534.log -Append
+            throw
+          }
 
       - name: Upload runtime-verified artifacts
         uses: actions/upload-artifact@v4
@@ -100,6 +108,23 @@ jobs:
           $existingSha = ''
           try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
           $payload = @{ message = 'Record verified Bestiary Launcher 5.3.4 release [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
+          if ($existingSha) { $payload.sha = $existingSha }
+          $json = $payload | ConvertTo-Json -Compress
+          $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+
+      - name: Publish CI failure report
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail = if (Test-Path 'ci-v534.log') { (Get-Content 'ci-v534.log' -Tail 300) -join "`n" } else { 'Build failed before ci-v534.log was created.' }
+          $report = "run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($report))
+          $path = 'bestiary-v534/ci-failure.txt'
+          $existingSha = ''
+          try { $existingSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$env:GITHUB_REF_NAME" --jq '.sha' } catch { $existingSha = '' }
+          $payload = @{ message = 'Record Bestiary Launcher 5.3.4 CI failure [skip ci]'; content = $encoded; branch = $env:GITHUB_REF_NAME }
           if ($existingSha) { $payload.sha = $existingSha }
           $json = $payload | ConvertTo-Json -Compress
           $json | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
