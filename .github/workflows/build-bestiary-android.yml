@@ -55,6 +55,7 @@ jobs:
           python android-build/patch_bestiary_android.py
           python android-build/patch_android_compat.py
           python android-build/patch_runtime_metadata.py
+          python android-build/prepare_bestiary_logo_chunks.py
           python android-build/patch_bestiary_android_v100.py
           python android-build/patch_bestiary_android_v100_fix.py
 
