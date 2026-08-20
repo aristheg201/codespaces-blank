@@ -103,7 +103,7 @@ jobs:
           if($keybind -notmatch "old\?\.mode==='locked'\?old\.key:optionsKey"){throw 'DEFAULT/LOCKED merge contract missing.'}
           if($main -notmatch "keybind:choose-options" -or $main -notmatch "keybind:import-options"){throw 'options picker IPC missing.'}
           if($app -notmatch 'CHỌN OPTIONS.TXT' -or $app -notmatch 'QUÉT LẠI' -or $app -notmatch 'onDrop'){throw 'options source UI missing.'}
-          if($app -match '\+ THÊM KEYBIND' -or $app -match '>GỠ<'){throw 'manual keybind creation/removal must not exist.'}
+          if($app -match '\+ THÊM KEYBIND' -or $app -match 'const remove=\(i:number\)' -or $app -match 'const add=\(\)=>'){throw 'manual keybind creation/removal must not exist.'}
           if($types -notmatch 'sourcePath\?:string' -or $types -notmatch 'chooseOptionsFile'){throw 'options source API types missing.'}
           if($main -notmatch 'app\.exit\(0\)' -or $main -notmatch "app\.on\('second-instance'"){throw 'Lifecycle hardening missing.'}
 
