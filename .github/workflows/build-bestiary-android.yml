@@ -168,7 +168,7 @@ jobs:
           set -euo pipefail
           APK_SHA="$(awk '{print $1}' build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt)"
           [[ "$APK_SHA" =~ ^[a-f0-9]{64}$ ]]
-          MANIFEST="$(python - <<'PY'
+          RESULT="$(python - <<'PY'
           import json, os
           sha = open('build-output/BestiaryLauncher-Android-1.0.0-debug-SHA256.txt', encoding='utf-8').read().split()[0]
           print(json.dumps({
@@ -177,17 +177,18 @@ jobs:
               'sha256': sha,
               'sourceCommit': os.environ['GITHUB_SHA'],
               'branch': os.environ['GITHUB_REF_NAME'],
+              'runId': int(os.environ['GITHUB_RUN_ID']),
               'upstreamCommit': '360d708262ff703d9b52782d20cd348410a33df5',
               'verified': True
           }, ensure_ascii=False, indent=2))
           PY
           )"
-          CONTENT="$(printf '%s' "$MANIFEST" | base64 -w0)"
-          PATH_NAME='android-build/ci-build.json'
+          CONTENT="$(printf '%s' "$RESULT" | base64 -w0)"
+          PATH_NAME="android-build/ci/${GITHUB_SHA}.json"
           EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
           python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
           import json, sys, os
-          payload = {'message': 'Record verified Bestiary Android 1.0.0 build [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          payload = {'message': 'Record verified Bestiary Android CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
           if sys.argv[2]: payload['sha'] = sys.argv[2]
           print(json.dumps(payload))
           PY
@@ -200,23 +201,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          FAILURE="$(python - <<'PY'
+          RESULT="$(python - <<'PY'
           import json, os, datetime
           print(json.dumps({
               'version': '1.0.0',
               'sourceCommit': os.environ['GITHUB_SHA'],
               'branch': os.environ['GITHUB_REF_NAME'],
+              'runId': int(os.environ['GITHUB_RUN_ID']),
               'verified': False,
               'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
           }, indent=2))
           PY
           )"
-          CONTENT="$(printf '%s' "$FAILURE" | base64 -w0)"
-          PATH_NAME='android-build/ci-failure.json'
+          CONTENT="$(printf '%s' "$RESULT" | base64 -w0)"
+          PATH_NAME="android-build/ci/${GITHUB_SHA}.json"
           EXISTING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
           python - "$CONTENT" "$EXISTING_SHA" <<'PY' > /tmp/payload.json
           import json, sys, os
-          payload = {'message': 'Record failed Bestiary Android 1.0.0 build [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
+          payload = {'message': 'Record failed Bestiary Android CI result [skip ci]', 'content': sys.argv[1], 'branch': os.environ['GITHUB_REF_NAME']}
           if sys.argv[2]: payload['sha'] = sys.argv[2]
           print(json.dumps(payload))
           PY
