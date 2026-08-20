@@ -27,7 +27,9 @@ skin.write_text(s, encoding='utf-8')
 
 bootstrap = JAVA / 'BestiaryBootstrap.java'
 b = bootstrap.read_text(encoding='utf-8')
-needle = '        if (!SAFE_PATH.matcher(path).matches() || path.contains("..")) return false;\n'
+# patch_bestiary_android_v100.py keeps this path traversal guard as the first
+# stable statement inside isAllowed(). Insert runtime-component ownership after it.
+needle = '        if (lower.contains("../") || lower.startsWith("/")) return false;\n'
 req(needle in b, 'bootstrap path guard marker missing')
 b = b.replace(
     needle,
@@ -37,5 +39,5 @@ b = b.replace(
 bootstrap.write_text(b, encoding='utf-8')
 
 req('File đã chọn không phải PNG hợp lệ' in skin.read_text(encoding='utf-8'), 'PNG signature validation missing')
-req('bestiary-skin-bridge' in bootstrap.read_text(encoding='utf-8'), 'Skin Bridge ownership guard missing')
+req('lower.contains("bestiary-skin-bridge")' in bootstrap.read_text(encoding='utf-8'), 'Skin Bridge ownership guard missing')
 print('Bestiary Android hardening patch applied')
