@@ -157,9 +157,9 @@ jobs:
             [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
           }
           '@
-          function Get-ManagerWindow([int]$Pid) {
+          function Get-ManagerWindow([int]$ProcessId) {
             $script:managerWindow=[IntPtr]::Zero
-            [BestiaryManagerWin32]::EnumWindows({ param($h,$l) [uint32]$wp=0; [void][BestiaryManagerWin32]::GetWindowThreadProcessId($h,[ref]$wp); if($wp -eq $Pid -and [BestiaryManagerWin32]::IsWindowVisible($h)){ $script:managerWindow=$h; return $false }; return $true },[IntPtr]::Zero)|Out-Null
+            [BestiaryManagerWin32]::EnumWindows({ param($h,$l) [uint32]$wp=0; [void][BestiaryManagerWin32]::GetWindowThreadProcessId($h,[ref]$wp); if($wp -eq $ProcessId -and [BestiaryManagerWin32]::IsWindowVisible($h)){ $script:managerWindow=$h; return $false }; return $true },[IntPtr]::Zero)|Out-Null
             return $script:managerWindow
           }
           function Wait-ManagerWindow([System.Diagnostics.Process]$Process,[int]$Seconds=25) {
