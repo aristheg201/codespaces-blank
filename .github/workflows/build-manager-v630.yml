@@ -65,6 +65,7 @@ jobs:
           Copy-Item manager-v630/ModAuditService.ts manager/src/main/services/ModAuditService.ts -Force
           Copy-Item manager-v630/store.ts manager/src/renderer/src/store.ts -Force
           Copy-Item manager-v630/App.tsx manager/src/renderer/src/App.tsx -Force
+          node manager-v630/patch-workspace-fixes.cjs
           node manager-v630/patch-main.cjs
           node manager-v630/patch-distribution.cjs
           node manager-v630/patch-ui-fixes.cjs
