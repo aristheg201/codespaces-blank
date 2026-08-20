@@ -54,9 +54,32 @@ jobs:
           set -euo pipefail
           python android-build/patch_bestiary_android.py
           python android-build/patch_android_compat.py
-          grep -q 'applicationId "vn.svframe.bestiary.launcher"' amethyst/app_pojavlauncher/build.gradle
-          grep -q '1.21.1/0.18.4/profile/json' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
-          grep -q 'opengles_mobileglues' amethyst/app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java
+          python android-build/patch_runtime_metadata.py
+          python android-build/patch_bestiary_android_v100.py
+          python android-build/patch_bestiary_android_v100_fix.py
+
+      - name: Verify Bestiary Android contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=amethyst/app_pojavlauncher
+          BOOT="$APP/src/main/java/net/kdt/pojavlaunch/BestiaryBootstrap.java"
+          LAUNCHER="$APP/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java"
+          MENU="$APP/src/main/java/net/kdt/pojavlaunch/fragments/MainMenuFragment.java"
+          MANIFEST="$APP/src/main/AndroidManifest.xml"
+          LAYOUT="$APP/src/main/res/layout/fragment_launcher.xml"
+          grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
+          grep -q 'versionName "1.0.0"' "$APP/build.gradle"
+          grep -q 'BestiaryOfflineAccount.prompt(this)' "$LAUNCHER"
+          ! grep -q 'Tools.swapFragment(this, SelectAuthFragment.class' "$LAUNCHER"
+          grep -q 'includesAndroidProfile(item)' "$BOOT"
+          grep -q 'BestiaryRendererPolicy.apply()' "$BOOT"
+          grep -q 'BestiaryAppUpdater.check(this)' "$LAUNCHER"
+          grep -q 'android:screenOrientation="portrait"' "$MANIFEST"
+          grep -q 'CHƠI NGAY' "$LAYOUT"
+          ! grep -q 'deleteSodiumMods' "$MENU"
+          test -s "$APP/src/main/res/drawable-nodpi/bestiary_logo.png"
+          file "$APP/src/main/res/drawable-nodpi/bestiary_logo.png" | grep -q 'PNG image data'
 
       - name: Generate language list
         working-directory: amethyst
