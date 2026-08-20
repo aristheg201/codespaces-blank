@@ -50,13 +50,13 @@ public static class BestiaryWin32 {
 }
 '@
 
-function Get-MainWindowForProcess([int]$Pid) {
+function Get-MainWindowForProcess([int]$ProcessId) {
   $script:foundWindow = [IntPtr]::Zero
   [BestiaryWin32]::EnumWindows({
     param([IntPtr]$hWnd, [IntPtr]$lParam)
     [uint32]$windowPid = 0
     [void][BestiaryWin32]::GetWindowThreadProcessId($hWnd, [ref]$windowPid)
-    if ($windowPid -eq $Pid -and [BestiaryWin32]::IsWindowVisible($hWnd)) {
+    if ($windowPid -eq $ProcessId -and [BestiaryWin32]::IsWindowVisible($hWnd)) {
       $script:foundWindow = $hWnd
       return $false
     }
