@@ -23,6 +23,16 @@ req(old in s, 'skin hard-limit marker missing')
 s = s.replace(old, '''            total += n;
             if (total > limit) throw new IllegalArgumentException("File skin vượt quá giới hạn dung lượng");
             out.write(buf, 0, n);''', 1)
+old = '''                if (!"slim".equals(variant)) variant = "classic";
+
+                File dir = new File(Tools.DIR_GAME_NEW, ".bestiary");'''
+req(old in s, 'skin variant marker missing')
+s = s.replace(old, '''                if (!"slim".equals(variant)) variant = "classic";
+                final String savedVariant = variant;
+
+                File dir = new File(Tools.DIR_GAME_NEW, ".bestiary");''', 1)
+s = s.replace('meta.addProperty("variant", variant);', 'meta.addProperty("variant", savedVariant);', 1)
+s = s.replace('"Đã lưu skin " + variant + ". Skin sẽ áp dụng khi vào server."', '"Đã lưu skin " + savedVariant + ". Skin sẽ áp dụng khi vào server."', 1)
 skin.write_text(s, encoding='utf-8')
 
 bootstrap = JAVA / 'BestiaryBootstrap.java'
@@ -39,5 +49,6 @@ b = b.replace(
 bootstrap.write_text(b, encoding='utf-8')
 
 req('File đã chọn không phải PNG hợp lệ' in skin.read_text(encoding='utf-8'), 'PNG signature validation missing')
+req('final String savedVariant = variant;' in skin.read_text(encoding='utf-8'), 'skin lambda capture fix missing')
 req('lower.contains("bestiary-skin-bridge")' in bootstrap.read_text(encoding='utf-8'), 'Skin Bridge ownership guard missing')
 print('Bestiary Android hardening patch applied')
