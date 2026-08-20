@@ -11,21 +11,31 @@ primary = sorted(
 if not primary:
     raise SystemExit('No canonical logo5-NN chunks found')
 
-# The repository also contains split aliases such as logo5-00a/logo5-00b.
-# patch_bestiary_android_v100.py intentionally globs logo5-* for compatibility,
-# so hide the split aliases in the ephemeral CI workspace to avoid duplicating
-# base64 data. Repository files are not modified by this build step.
-backup = Path('android-build/.logo-split-aliases')
-backup.mkdir(parents=True, exist_ok=True)
-for p in root.glob('logo5-*'):
-    if p not in primary:
-        shutil.move(str(p), str(backup / p.name))
+# Each canonical logo5-NN file is an independently base64-encoded binary chunk.
+# Decode each file first, then concatenate the PNG bytes. Concatenating the text
+# would put '=' padding in the middle of a base64 stream and corrupt the asset.
+parts = []
+for p in primary:
+    encoded = ''.join(p.read_text(encoding='utf-8').split())
+    try:
+        parts.append(base64.b64decode(encoded, validate=True))
+    except Exception as exc:
+        raise SystemExit(f'Bestiary logo chunk {p.name} is invalid base64: {exc}')
 
-encoded = ''.join(p.read_text(encoding='utf-8').strip() for p in primary)
-try:
-    raw = base64.b64decode(encoded, validate=True)
-except Exception as exc:
-    raise SystemExit(f'Canonical Bestiary logo base64 is invalid: {exc}')
+raw = b''.join(parts)
 if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
     raise SystemExit('Canonical Bestiary logo is not PNG')
-print(f'Bestiary logo verified from {len(primary)} canonical chunks ({len(raw)} bytes)')
+# PNG must end with an IEND chunk. This catches incomplete/reordered chunk sets.
+if b'IEND' not in raw[-32:]:
+    raise SystemExit('Canonical Bestiary logo is incomplete: PNG IEND missing')
+
+# patch_bestiary_android_v100.py consumes a generic logo5-* base64 stream. Normalize
+# the ephemeral CI workspace to one canonical encoded file so that patch remains
+# independent from the historical repository chunk layout.
+backup = Path('android-build/.logo-source-chunks')
+backup.mkdir(parents=True, exist_ok=True)
+for p in list(root.glob('logo5-*')):
+    shutil.move(str(p), str(backup / p.name))
+(root / 'logo5-00').write_text(base64.b64encode(raw).decode('ascii'), encoding='ascii')
+
+print(f'Bestiary logo normalized from {len(primary)} canonical chunks ({len(raw)} bytes)')
