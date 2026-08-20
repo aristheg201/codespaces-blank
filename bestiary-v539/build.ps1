@@ -10,6 +10,11 @@ Write-Host '=== Apply 5.3.9 adaptive JVM generator ==='
 Copy-Item 'bestiary-v539/JvmProfileGenerator.ts' 'source/src/main/core/JvmProfileGenerator.ts' -Force
 python 'bestiary-v539/patch_v539.py'
 if ($LASTEXITCODE -ne 0) { throw 'Unable to apply Launcher 5.3.9 adaptive JVM patch.' }
+$main539 = Get-Content 'source/src/main/index.ts' -Raw
+$oldProfile = '      profile: settings.clientProfile,'
+if (-not $main539.Contains($oldProfile)) { throw 'SyncEngine client profile marker missing.' }
+$main539 = $main539.Replace($oldProfile, '      profile: settings.clientProfile ?? undefined,')
+Set-Content 'source/src/main/index.ts' $main539 -Encoding UTF8
 
 Push-Location source
 $pkg = Get-Content package.json -Raw | ConvertFrom-Json
@@ -39,6 +44,7 @@ if ($generator -notmatch '\-XX:\+UseStringDeduplication' -or $generator -notmatc
 if ($generator -match 'G1HeapRegionSize=8M') { throw 'Fixed 8M G1 region size must not be forced on weak clients.' }
 if ($main -notmatch 'minRamMb: generated\.recommendedMinRamMb' -or $main -notmatch 'maxRamMb: generated\.recommendedMaxRamMb') { throw 'Generate is not atomic RAM + JVM.' }
 if ($main -notmatch 'weakMemoryTier' -or $main -notmatch "generatedJvmArgs\.includes\('-Dbestiary\.jvm\.profile=539'\)") { throw 'Weak-machine migration contract missing.' }
+if ($main -notmatch 'profile: settings\.clientProfile \?\? undefined') { throw 'SyncEngine nullable profile typing fix missing.' }
 if ($settingsUi -notmatch 'min=\{1024\}' -or $settingsUi -notmatch 'step=\{256\}' -or $settingsUi -notmatch 'GENERATE JVM \+ RAM PROFILE') { throw 'Weak-machine RAM UI contract missing.' }
 if ($settingsUi -notmatch 'minRamMb: next\.settings\.minRamMb' -or $settingsUi -notmatch 'maxRamMb: next\.settings\.maxRamMb') { throw 'Settings UI does not consume generated RAM recommendation.' }
 if ($appSource -notmatch 'generateJvmFlags\(next\)' -or $appSource -notmatch "currentVersion: '5\.3\.9'") { throw 'First profile selection is not adaptive or version metadata missing.' }
