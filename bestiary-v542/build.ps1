@@ -40,7 +40,8 @@ if ($account -notmatch 'api\.minecraftservices\.com/authentication/login_with_xb
 if ($account -notmatch 'api\.minecraftservices\.com/entitlements/mcstore') { throw 'Minecraft Java entitlement verification missing.' }
 if ($account -notmatch 'api\.minecraftservices\.com/minecraft/profile') { throw 'Minecraft profile verification missing.' }
 if ($main -notmatch 'microsoftDirectLaunch: true') { throw 'Main-process direct Microsoft default missing.' }
-if ($main -notmatch 'getLaunchAuthorization\(\)') { throw 'Main process does not request direct Minecraft authorization.' }
+if ($main -notmatch 'accountService\.getLaunchAuthorization\(settings\.username\)') { throw 'Main process does not request direct Minecraft authorization.' }
+if ($main -notmatch 'authorization: authorization \?\? undefined') { throw 'Minecraft Launcher Core request does not receive Microsoft authorization.' }
 if ($main -notmatch 'officialLauncherBridge\.prepareAndOpen') { throw 'Legacy bridge call-site unexpectedly disappeared; audit assumptions changed.' }
 if ($bridge -notmatch "BESTIARY_ALLOW_OFFICIAL_LAUNCHER_BRIDGE !== '1'") { throw 'Official Launcher bridge is not fail-closed.' }
 if ($bridge -notmatch 'Official Minecraft Launcher bridge is disabled in Bestiary Launcher 5\.4\.2') { throw 'Bridge fail-closed error marker missing.' }
@@ -84,6 +85,7 @@ Copy-Item 'source/src/main/index.ts' 'build-output-v542/diagnostic-source/index.
 Copy-Item 'source/src/main/core/AccountService.ts' 'build-output-v542/diagnostic-source/AccountService.ts' -Force
 Copy-Item 'source/src/main/core/RemoteService.ts' 'build-output-v542/diagnostic-source/RemoteService.ts' -Force
 Copy-Item 'source/src/main/core/OfficialLauncherBridge.ts' 'build-output-v542/diagnostic-source/OfficialLauncherBridge.ts' -Force
+Copy-Item 'source/src/main/core/Launcher.ts' 'build-output-v542/diagnostic-source/Launcher.ts' -Force
 if (Test-Path 'source/dist-main/index.js') { Copy-Item 'source/dist-main/index.js' 'build-output-v542/diagnostic-source/dist-main-index.js' -Force }
 
 @"
@@ -93,6 +95,8 @@ shouldUseOfficialLauncher=false
 microsoftScope=MS_GAME_SCOPE
 staleFlagCanDisableAuthorization=false
 officialLauncherBridgeDefault=blocked
+mainAuthorizationCall=accountService.getLaunchAuthorization(settings.username)
+launcherAuthorizationInjected=true
 "@ | Set-Content 'build-output-v542/routing-contract.txt' -Encoding ascii
 
 Write-Host "Launcher 5.4.2 SHA256: $hash"
