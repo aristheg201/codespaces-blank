@@ -1,18 +1,22 @@
 name: Trigger Bestiary Launcher 5.4.0 Release
 
 on:
-  issues:
-    types: [opened]
+  pull_request_target:
+    types: [opened, reopened]
   workflow_dispatch:
 
 permissions:
   actions: write
   contents: read
-  issues: read
+  pull-requests: read
 
 jobs:
   dispatch-release:
-    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == '[release] Bestiary Launcher 5.4.0'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'bestiary-launcher-v5-4-0-approved-msa' &&
+       github.event.pull_request.title == '[release] Bestiary Launcher 5.4.0')
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch Launcher 5.4.0 release workflow
