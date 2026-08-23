@@ -1,0 +1,21 @@
+name: Trigger Bestiary Launcher 5.4.0 Release
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  issues: read
+
+jobs:
+  dispatch-release:
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == '[release] Bestiary Launcher 5.4.0'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Launcher 5.4.0 release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release-bestiary-launcher-v540.yml --repo "$GITHUB_REPOSITORY" --ref main
