@@ -1,0 +1,113 @@
+name: Publish Bestiary Launcher 5.4.2 Verified Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v542-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Record publish run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --argjson run "$GITHUB_RUN_ID" '{version:"5.4.2",sourceRunId:32651480705,publishRunId:$run,status:"running"}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v542/publish-running.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=main" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record Launcher 5.4.2 publish start [skip ci]' --arg content "$ENC" --arg branch main --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record Launcher 5.4.2 publish start [skip ci]' --arg content "$ENC" --arg branch main '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
+
+      - name: Download verified 5.4.2 build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.2
+          path: publish
+          repository: aristheg201/codespaces-blank
+          run-id: 32651480705
+          github-token: ${{ github.token }}
+
+      - name: Verify binary and shipped routing source
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2.exe' -print -quit)"
+          HASHFILE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2-SHA256.txt' -print -quit)"
+          CONTRACT="$(find publish -type f -name 'routing-contract.txt' -print -quit)"
+          INDEX="$(find publish -type f -path '*/diagnostic-source/index.ts' -print -quit)"
+          ACCOUNT="$(find publish -type f -path '*/diagnostic-source/AccountService.ts' -print -quit)"
+          LAUNCHER="$(find publish -type f -path '*/diagnostic-source/Launcher.ts' -print -quit)"
+          BRIDGE="$(find publish -type f -path '*/diagnostic-source/OfficialLauncherBridge.ts' -print -quit)"
+          test -s "$EXE" && test -s "$HASHFILE" && test -s "$CONTRACT"
+          test -s "$INDEX" && test -s "$ACCOUNT" && test -s "$LAUNCHER" && test -s "$BRIDGE"
+          tr -d '\r' < "$CONTRACT" > contract.lf
+          tr -d '\r' < "$HASHFILE" > hash.lf
+          grep -qx 'version=5.4.2' contract.lf
+          grep -qx 'shouldUseOfficialLauncher=false' contract.lf
+          grep -qx 'microsoftScope=MS_GAME_SCOPE' contract.lf
+          grep -qx 'staleFlagCanDisableAuthorization=false' contract.lf
+          grep -qx 'officialLauncherBridgeDefault=blocked' contract.lf
+          grep -Fq 'mainAuthorizationCall=accountService.getLaunchAuthorization(settings.username)' contract.lf
+          grep -qx 'launcherAuthorizationInjected=true' contract.lf
+          grep -Fq 'accountService.getLaunchAuthorization(settings.username)' "$INDEX"
+          grep -Fq 'authorization: authorization ?? undefined' "$INDEX"
+          grep -Fq 'public shouldUseOfficialLauncher(): boolean {' "$ACCOUNT"
+          grep -Fq 'return MS_GAME_SCOPE;' "$ACCOUNT"
+          grep -Fq 'private microsoftDirectLaunchEnabled = true;' "$ACCOUNT"
+          grep -Fq 'this.microsoftDirectLaunchEnabled = true;' "$ACCOUNT"
+          grep -Fq 'const authorization = normalized.authorization ?? this.createOfflineAuthorization' "$LAUNCHER"
+          grep -Fq 'authorization,' "$LAUNCHER"
+          grep -Fq 'client.launch(options)' "$LAUNCHER"
+          grep -Fq "BESTIARY_ALLOW_OFFICIAL_LAUNCHER_BRIDGE !== '1'" "$BRIDGE"
+          EXPECTED="$(awk '{print tolower($1)}' hash.lf)"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+          echo "hashfile=$HASHFILE" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Launcher 5.4.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXE: ${{ steps.verify.outputs.exe }}
+          HASHFILE: ${{ steps.verify.outputs.hashfile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release delete launcher-v5.4.2 --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          gh release create launcher-v5.4.2 "$EXE" "$HASHFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title 'Bestiary Launcher 5.4.2' \
+            --notes 'Microsoft direct launch is now fail-closed against the old Official Minecraft Launcher bridge. Microsoft login always requests XboxLive.signin + offline_access, the main process obtains MinecraftAuthorization, and that authorization is injected into minecraft-launcher-core before Java is spawned. Existing identity-only Microsoft sessions must sign out and sign in once.'
+
+      - name: Record publish success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg sha "$SHA256" --argjson run "$GITHUB_RUN_ID" '{version:"5.4.2",sourceRunId:32651480705,publishRunId:$run,sha256:$sha,routingSourceVerified:true,releasePublished:true,status:"success"}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v542/publish-success.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=main" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record Launcher 5.4.2 publish success [skip ci]' --arg content "$ENC" --arg branch main --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record Launcher 5.4.2 publish success [skip ci]' --arg content "$ENC" --arg branch main '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
