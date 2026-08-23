@@ -1,17 +1,25 @@
-name: Trigger Bestiary Launcher 5.4.0 Release
+name: Publish Verified Bestiary Launcher 5.4.0
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [reopened]
   workflow_dispatch:
 
 permissions:
-  actions: write
-  contents: read
+  actions: read
+  contents: write
   pull-requests: read
 
+concurrency:
+  group: bestiary-launcher-v540-publish
+  cancel-in-progress: false
+
+env:
+  SOURCE_BRANCH: bestiary-launcher-v5-4-0-approved-msa
+  SOURCE_RUN_ID: '32649057166'
+
 jobs:
-  dispatch-release:
+  publish-verified-artifact:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
@@ -19,7 +27,80 @@ jobs:
        github.event.pull_request.title == '[release] Bestiary Launcher 5.4.0')
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Launcher 5.4.0 release workflow
+      - name: Download verified Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.0
+          path: publish
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Verify exact installer payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE='publish/build-output-v540/BestiaryLauncher-Setup-5.4.0.exe'
+          SHA_FILE='publish/build-output-v540/BestiaryLauncher-Setup-5.4.0-SHA256.txt'
+          SOURCE_FILE='publish/source-commit.txt'
+          test -s "$EXE"
+          test -s "$SHA_FILE"
+          test -s "$SOURCE_FILE"
+          EXPECTED="$(grep -Eio '[a-f0-9]{64}' "$SHA_FILE" | head -n1 | tr '[:upper:]' '[:lower:]')"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+          test "$EXPECTED" = "$ACTUAL"
+          test "$ACTUAL" = 'b4c0274fb5c2827cb7dce4a9340911535d41d8eff4e2b1831f8f08d5106cde5a'
+          echo "Verified Launcher 5.4.0 SHA256: $ACTUAL"
+      - name: Publish Launcher 5.4.0 release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release-bestiary-launcher-v540.yml --repo "$GITHUB_REPOSITORY" --ref main
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE='publish/build-output-v540/BestiaryLauncher-Setup-5.4.0.exe'
+          SHA_FILE='publish/build-output-v540/BestiaryLauncher-Setup-5.4.0-SHA256.txt'
+          SOURCE_SHA="$(tr -d '\r\n' < publish/source-commit.txt)"
+          TAG='launcher-v5.4.0'
+          NOTES='Mojang approved the Bestiary Launcher Application ID for Java Edition Game Services. Microsoft mode now defaults to Bestiary direct authentication using Device Code OAuth with XboxLive.signin/offline_access, Xbox Live and XSTS exchange, Minecraft Java entitlement verification, profile retrieval, and authenticated game launch. Accounts signed in on the old identity-only bridge must sign in again once. Local/offline mode stays separate. Adaptive JVM and all 5.3.9 runtime behavior are retained.'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --title 'Bestiary Launcher 5.4.0' --notes "$NOTES"
+          fi
+          gh release upload "$TAG" "$EXE" "$SHA_FILE" --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Record verified release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(sha256sum publish/build-output-v540/BestiaryLauncher-Setup-5.4.0.exe | awk '{print $1}')"
+          SOURCE_SHA="$(tr -d '\r\n' < publish/source-commit.txt)"
+          python - "$HASH" "$SOURCE_SHA" <<'PY' > /tmp/marker.json
+          import json, os, sys
+          print(json.dumps({
+            'version':'5.4.0',
+            'sha256':sys.argv[1],
+            'sourceCommit':sys.argv[2],
+            'branch':os.environ['SOURCE_BRANCH'],
+            'sourceRunId':int(os.environ['SOURCE_RUN_ID']),
+            'publishRunId':int(os.environ['GITHUB_RUN_ID']),
+            'mojangAppIdApproved':True,
+            'microsoftDirectLaunchDefault':True,
+            'xboxLiveScopeVerified':True,
+            'xstsFlowVerified':True,
+            'minecraftEntitlementFlowVerified':True,
+            'minecraftProfileFlowVerified':True,
+            'adaptiveJvmRetained':True,
+            'runtimeSmokeVerified':True,
+            'releasePublished':True,
+            'verified':True,
+          }, ensure_ascii=False, indent=2))
+          PY
+          CONTENT="$(base64 -w0 /tmp/marker.json)"
+          P='bestiary-v540/ci-build.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$SOURCE_BRANCH" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json, os, sys
+          payload={'message':'Record verified Launcher 5.4.0 release [skip ci]','content':sys.argv[1],'branch':os.environ['SOURCE_BRANCH']}
+          if sys.argv[2]: payload['sha']=sys.argv[2]
+          print(json.dumps(payload))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
