@@ -1,0 +1,81 @@
+name: Publish Bestiary Launcher 5.4.2 Verified Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v542.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download verified 5.4.2 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.2
+          path: publish
+          repository: aristheg201/codespaces-blank
+          run-id: 32651480705
+          github-token: ${{ github.token }}
+
+      - name: Verify exact built artifact
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2.exe' -print -quit)"
+          HASHFILE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2-SHA256.txt' -print -quit)"
+          CONTRACT="$(find publish -type f -name 'routing-contract.txt' -print -quit)"
+          test -n "$EXE" && test -s "$EXE"
+          test -n "$HASHFILE" && test -s "$HASHFILE"
+          test -n "$CONTRACT" && test -s "$CONTRACT"
+          NORMALIZED="$(mktemp)"
+          tr -d '\r' < "$CONTRACT" > "$NORMALIZED"
+          grep -qx 'shouldUseOfficialLauncher=false' "$NORMALIZED"
+          grep -qx 'microsoftScope=MS_GAME_SCOPE' "$NORMALIZED"
+          grep -qx 'staleFlagCanDisableAuthorization=false' "$NORMALIZED"
+          grep -qx 'officialLauncherBridgeDefault=blocked' "$NORMALIZED"
+          EXPECTED="$(tr -d '\r' < "$HASHFILE" | awk '{print tolower($1)}')"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+          echo "hashfile=$HASHFILE" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Launcher 5.4.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXE: ${{ steps.verify.outputs.exe }}
+          HASHFILE: ${{ steps.verify.outputs.hashfile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release delete launcher-v5.4.2 --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          gh release create launcher-v5.4.2 "$EXE" "$HASHFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Bestiary Launcher 5.4.2" \
+            --notes "Microsoft direct-launch hardening. Microsoft sessions use XboxLive.signin + Xbox/XSTS + Minecraft Services. The old Official Minecraft Launcher bridge is fail-closed by default, and stale remote/cache state can no longer disable direct authorization. Built and verified from run 32651480705."
+
+      - name: Write publish marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg sha "$SHA256" '{version:"5.4.2",sha256:$sha,sourceRunId:32651480705,releasePublished:true,verified:true}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v542/publish.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=bestiary-launcher-v5-4-2-force-direct-microsoft" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record Launcher 5.4.2 publish [skip ci]' --arg content "$ENC" --arg branch 'bestiary-launcher-v5-4-2-force-direct-microsoft' --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record Launcher 5.4.2 publish [skip ci]' --arg content "$ENC" --arg branch 'bestiary-launcher-v5-4-2-force-direct-microsoft' '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
