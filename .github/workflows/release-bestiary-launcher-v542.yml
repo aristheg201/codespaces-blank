@@ -1,0 +1,147 @@
+name: Release Bestiary Launcher 5.4.2 Forced Direct Microsoft
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-bestiary-launcher-v542.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: bestiary-launcher-v542-release
+  cancel-in-progress: true
+
+env:
+  SOURCE_BRANCH: bestiary-launcher-v5-4-2-force-direct-microsoft
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout Launcher 5.4.2 source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+
+      - name: Record CI run marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $body = [ordered]@{version='5.4.2';branch=$env:SOURCE_BRANCH;runId=[long]$env:GITHUB_RUN_ID;status='running'} | ConvertTo-Json
+          $enc = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
+          $path = 'bestiary-v542/ci-running.json'
+          $old = ''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$env:SOURCE_BRANCH" --jq '.sha' 2>$null | ForEach-Object { $old = $_ }
+          $payload = @{message='Record Launcher 5.4.2 CI start [skip ci]';content=$enc;branch=$env:SOURCE_BRANCH}
+          if ($old) { $payload.sha = $old }
+          ($payload | ConvertTo-Json -Compress) | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and verify Launcher 5.4.2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./bestiary-v542/build.ps1 *>&1 | Tee-Object -FilePath ci-v542.log
+          if($LASTEXITCODE -ne 0){throw "5.4.2 build returned $LASTEXITCODE"}
+
+      - name: Upload verified Launcher 5.4.2
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.2
+          path: |
+            build-output-v542/BestiaryLauncher-Setup-5.4.2.exe
+            build-output-v542/BestiaryLauncher-Setup-5.4.2-SHA256.txt
+            build-output-v542/runtime-smoke-stdout.log
+            build-output-v542/runtime-smoke-stderr.log
+            build-output-v542/routing-contract.txt
+            build-output-v542/diagnostic-source/**
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download verified artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.2
+          path: publish
+
+      - name: Verify release payload
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2.exe' -print -quit)"
+          HASHFILE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.2-SHA256.txt' -print -quit)"
+          CONTRACT="$(find publish -type f -name 'routing-contract.txt' -print -quit)"
+          test -n "$EXE" && test -s "$EXE"
+          test -n "$HASHFILE" && test -s "$HASHFILE"
+          test -n "$CONTRACT" && grep -q '^shouldUseOfficialLauncher=false$' "$CONTRACT"
+          test "$(grep '^microsoftScope=' "$CONTRACT")" = 'microsoftScope=MS_GAME_SCOPE'
+          test "$(grep '^staleFlagCanDisableAuthorization=' "$CONTRACT")" = 'staleFlagCanDisableAuthorization=false'
+          test "$(grep '^officialLauncherBridgeDefault=' "$CONTRACT")" = 'officialLauncherBridgeDefault=blocked'
+          EXPECTED="$(tr -d '\r' < "$HASHFILE" | awk '{print tolower($1)}')"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+          echo "hashfile=$HASHFILE" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Launcher 5.4.2 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXE: ${{ steps.verify.outputs.exe }}
+          HASHFILE: ${{ steps.verify.outputs.hashfile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release delete launcher-v5.4.2 --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          gh release create launcher-v5.4.2 "$EXE" "$HASHFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Bestiary Launcher 5.4.2" \
+            --notes "Microsoft direct-launch hardening. Production Microsoft sessions are pinned to XboxLive.signin + Xbox/XSTS + Minecraft Services and can no longer be silently routed to the official Minecraft Launcher by stale remote/cache state. OfficialLauncherBridge is fail-closed by default."
+
+      - name: Record verified release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg sha "$SHA256" --arg branch "$SOURCE_BRANCH" --argjson run "$GITHUB_RUN_ID" '{version:"5.4.2",sha256:$sha,branch:$branch,runId:$run,microsoftGameScopeForced:true,staleRuntimeFlagCannotDisableDirectAuth:true,officialLauncherSelectionDisabled:true,officialLauncherBridgeFailClosed:true,xboxLiveScopeVerified:true,xstsFlowVerified:true,minecraftEntitlementFlowVerified:true,minecraftProfileFlowVerified:true,runtimeSmokeVerified:true,releasePublished:true,verified:true}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v542/ci-build.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=$SOURCE_BRANCH" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record verified Launcher 5.4.2 release [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record verified Launcher 5.4.2 release [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
