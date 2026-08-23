@@ -93,8 +93,12 @@ main_path = root / 'src/main/index.ts'
 main = main_path.read_text(encoding='utf-8')
 main = main.replace('microsoftDirectLaunch: false', 'microsoftDirectLaunch: true')
 req('microsoftDirectLaunch: true' in main, 'Main-process direct Microsoft default missing')
-req('getLaunchAuthorization()' in main, 'Direct launch authorization call missing from main process')
-req('officialLauncherBridge.prepareAndOpen' in main, 'Expected legacy bridge call-site missing; guard audit cannot run')
+req('accountService.getLaunchAuthorization(settings.username)' in main,
+    'Direct launch authorization call missing from main process')
+req('authorization: authorization ?? undefined' in main,
+    'Minecraft launcher request does not receive Microsoft authorization')
+req('officialLauncherBridge.prepareAndOpen' in main,
+    'Expected legacy bridge call-site missing; guard audit cannot run')
 main_path.write_text(main, encoding='utf-8')
 
 remote_path = root / 'src/main/core/RemoteService.ts'
