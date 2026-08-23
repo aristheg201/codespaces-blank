@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: bestiary-launcher-v541-release-pr
+  group: bestiary-launcher-v541-release
   cancel-in-progress: true
 
 env:
