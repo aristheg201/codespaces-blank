@@ -29,6 +29,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_BRANCH }}
+      - name: Record CI run marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $body = [ordered]@{version='5.4.1';branch=$env:SOURCE_BRANCH;runId=[long]$env:GITHUB_RUN_ID;status='running'} | ConvertTo-Json
+          $enc = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
+          $path = 'bestiary-v541/ci-running.json'
+          $old = ''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$env:SOURCE_BRANCH" --jq '.sha' 2>$null | ForEach-Object { $old = $_ }
+          $payload = @{message='Record Launcher 5.4.1 CI start [skip ci]';content=$enc;branch=$env:SOURCE_BRANCH}
+          if ($old) { $payload.sha = $old }
+          ($payload | ConvertTo-Json -Compress) | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
