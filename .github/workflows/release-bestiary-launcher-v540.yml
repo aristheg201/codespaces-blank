@@ -11,6 +11,10 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: bestiary-launcher-v540-release
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -26,6 +30,17 @@ jobs:
       - name: Record source commit
         shell: pwsh
         run: "git rev-parse HEAD | Set-Content -Encoding ascii source-commit.txt"
+      - name: Publish CI running marker
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sourceSha=(Get-Content source-commit.txt -Raw).Trim()
+          $m=[ordered]@{version='5.4.0';sourceCommit=$sourceSha;branch=$env:SOURCE_BRANCH;runId=[long]$env:GITHUB_RUN_ID;status='running'}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m));$path='bestiary-v540/ci-running.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$env:SOURCE_BRANCH" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record Launcher 5.4.0 CI start [skip ci]';content=$enc;branch=$env:SOURCE_BRANCH};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
