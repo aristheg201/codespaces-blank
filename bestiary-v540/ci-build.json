@@ -1,0 +1,17 @@
+{
+  "version": "5.4.0",
+  "sha256": "88a6826e420cf4c00ff0482b814a79052b3028e325ba55cec8018a7ef17ea63e",
+  "sourceCommit": "8c34afee6cc874dcb67df265c0feead1285d3a07",
+  "branch": "bestiary-launcher-v5-4-0-approved-msa",
+  "runId": 32648751354,
+  "mojangAppIdApproved": true,
+  "microsoftDirectLaunchDefault": true,
+  "xboxLiveScopeVerified": true,
+  "xstsFlowVerified": true,
+  "minecraftEntitlementVerified": true,
+  "minecraftProfileFlowVerified": true,
+  "adaptiveJvmRetained": true,
+  "runtimeSmokeVerified": true,
+  "releasePublished": true,
+  "verified": true
+}
