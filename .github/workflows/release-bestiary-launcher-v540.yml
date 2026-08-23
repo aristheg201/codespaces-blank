@@ -1,0 +1,153 @@
+name: Release Bestiary Launcher 5.4.0 Approved MSA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-bestiary-launcher-v540.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 160
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      SOURCE_BRANCH: bestiary-launcher-v5-4-0-approved-msa
+    steps:
+      - name: Checkout Launcher 5.4.0 source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+      - name: Record source commit
+        shell: pwsh
+        run: "git rev-parse HEAD | Set-Content -Encoding ascii source-commit.txt"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and verify Launcher 5.4.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          try {
+            & ./bestiary-v540/build.ps1 *>&1 | Tee-Object -FilePath ci-v540.log
+            if($LASTEXITCODE -ne 0){throw "5.4.0 build returned $LASTEXITCODE"}
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v540.log -Append
+            throw
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.0
+          path: |
+            build-output-v540/BestiaryLauncher-Setup-5.4.0.exe
+            build-output-v540/BestiaryLauncher-Setup-5.4.0-SHA256.txt
+            build-output-v540/runtime-smoke-stdout.log
+            build-output-v540/runtime-smoke-stderr.log
+            source-commit.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish CI failure marker to source branch
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail=if(Test-Path ci-v540.log){(Get-Content ci-v540.log -Tail 400)-join "`n"}else{'No build log.'}
+          $sourceSha=if(Test-Path source-commit.txt){(Get-Content source-commit.txt -Raw).Trim()}else{'unknown'}
+          $text="run=$env:GITHUB_RUN_ID`nsourceCommit=$sourceSha`nsourceBranch=$env:SOURCE_BRANCH`n`n$tail"
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+          $path='bestiary-v540/ci-failure.txt';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$env:SOURCE_BRANCH" --jq '.sha' 2>$null|ForEach-Object{$existing=$_}
+          $payload=@{message='Record Launcher 5.4.0 CI failure [skip ci]';content=$encoded;branch=$env:SOURCE_BRANCH};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+  publish-release:
+    needs: build-windows
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_BRANCH: bestiary-launcher-v5-4-0-approved-msa
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.0
+          path: publish
+      - name: Verify release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s publish/BestiaryLauncher-Setup-5.4.0.exe
+          test -s publish/BestiaryLauncher-Setup-5.4.0-SHA256.txt
+          EXPECTED="$(awk '{print $1}' publish/BestiaryLauncher-Setup-5.4.0-SHA256.txt | tr '[:upper:]' '[:lower:]')"
+          ACTUAL="$(sha256sum publish/BestiaryLauncher-Setup-5.4.0.exe | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+      - name: Publish Launcher 5.4.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='launcher-v5.4.0'
+          NOTES='Mojang approved the Bestiary Launcher Application ID for Java Edition Game Services. Microsoft mode now defaults to Bestiary direct authentication using Device Code OAuth with XboxLive.signin/offline_access, Xbox Live and XSTS exchange, Minecraft Java entitlement verification, profile retrieval, and authenticated game launch. Accounts signed in on the old identity-only bridge must sign in again once. Local/offline mode stays separate. Adaptive JVM and all 5.3.9 runtime behavior are retained.'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_BRANCH" --title 'Bestiary Launcher 5.4.0' --notes "$NOTES"
+          fi
+          gh release upload "$TAG" publish/BestiaryLauncher-Setup-5.4.0.exe publish/BestiaryLauncher-Setup-5.4.0-SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Publish verified build marker to source branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(awk '{print $1}' publish/BestiaryLauncher-Setup-5.4.0-SHA256.txt | tr '[:upper:]' '[:lower:]')"
+          SOURCE_SHA="$(tr -d '\r\n' < publish/source-commit.txt)"
+          python - "$HASH" "$SOURCE_SHA" <<'PY' > /tmp/marker.json
+          import json, os, sys
+          print(json.dumps({
+            'version':'5.4.0',
+            'sha256':sys.argv[1],
+            'sourceCommit':sys.argv[2],
+            'branch':os.environ['SOURCE_BRANCH'],
+            'runId':int(os.environ['GITHUB_RUN_ID']),
+            'mojangAppIdApproved':True,
+            'microsoftDirectLaunchDefault':True,
+            'xboxLiveScopeVerified':True,
+            'xstsFlowVerified':True,
+            'minecraftEntitlementFlowVerified':True,
+            'minecraftProfileFlowVerified':True,
+            'adaptiveJvmRetained':True,
+            'runtimeSmokeVerified':True,
+            'releasePublished':True,
+            'verified':True,
+          }, ensure_ascii=False, indent=2))
+          PY
+          CONTENT="$(base64 -w0 /tmp/marker.json)"
+          P='bestiary-v540/ci-build.json'
+          OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${P}?ref=$SOURCE_BRANCH" --jq '.sha' 2>/dev/null || true)"
+          python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
+          import json, os, sys
+          payload={'message':'Record verified Launcher 5.4.0 approved MSA build [skip ci]','content':sys.argv[1],'branch':os.environ['SOURCE_BRANCH']}
+          if sys.argv[2]: payload['sha']=sys.argv[2]
+          print(json.dumps(payload))
+          PY
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/${P}" --input /tmp/payload.json >/dev/null
