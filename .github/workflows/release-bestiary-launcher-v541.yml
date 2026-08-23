@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release-bestiary-launcher-v541.yml'
+  pull_request:
+    branches: [main]
+    types: [opened, reopened]
   workflow_dispatch:
 
 permissions:
@@ -20,6 +23,11 @@ env:
 
 jobs:
   build-windows:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'bestiary-launcher-v5-4-1-direct-routing-fix' &&
+       github.event.pull_request.title == '[release] Bestiary Launcher 5.4.1')
     runs-on: windows-latest
     timeout-minutes: 180
     env:
