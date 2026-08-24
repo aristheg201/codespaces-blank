@@ -1,0 +1,98 @@
+name: Build Bestiary Launcher 5.3.7
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-1-0]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 100
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and verify Launcher 5.3.7
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          try {
+            & ./bestiary-v537/build.ps1 *>&1 | Tee-Object -FilePath ci-v537.log
+            if($LASTEXITCODE -ne 0){throw "5.3.7 build returned $LASTEXITCODE"}
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v537.log -Append
+            throw
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.3.7
+          path: |
+            build-output-v537/BestiaryLauncher-Setup-5.3.7.exe
+            build-output-v537/BestiaryLauncher-Setup-5.3.7-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish durable Launcher release assets
+        if: success() && github.ref_name == 'bestiary-launcher-v5-1-0'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag='launcher-v5.3.7'
+          gh release view $tag *> $null
+          if($LASTEXITCODE -ne 0){
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.3.7' --notes 'Final Windows release: hardened close/reopen lifecycle on portable and installed NSIS builds, zero surviving process tree after close, desktop scrollbar support, and Manager-controlled keybind policy merge without overwriting unrelated Minecraft options.'
+          }
+          gh release upload $tag build-output-v537/BestiaryLauncher-Setup-5.3.7.exe build-output-v537/BestiaryLauncher-Setup-5.3.7-SHA256.txt --clobber
+
+      - name: Publish verified release marker
+        if: success() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $line=Get-Content build-output-v537/BestiaryLauncher-Setup-5.3.7-SHA256.txt -Raw
+          $hash=($line -split '\s+')[0].Trim().ToLowerInvariant()
+          $manifest=[ordered]@{version='5.3.7';installerUrl='https://github.com/aristheg201/codespaces-blank/releases/download/launcher-v5.3.7/BestiaryLauncher-Setup-5.3.7.exe';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;lifecycleVerified=$true;installedLifecycleVerified=$true;processTreeVerified=$true;scrollbarVerified=$true;keybindConsumerVerified=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $path='bestiary-v537/ci-release.json';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record verified Bestiary Launcher 5.3.7 final release [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - name: Publish CI failure
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail=if(Test-Path ci-v537.log){(Get-Content ci-v537.log -Tail 300)-join "`n"}else{'No build log.'}
+          $text="run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+          $path='bestiary-v537/ci-failure.txt';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record Bestiary Launcher 5.3.7 CI failure [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
