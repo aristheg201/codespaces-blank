@@ -1,0 +1,105 @@
+name: Publish Bestiary Launcher 5.4.3 Verified Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v543.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  SOURCE_BRANCH: bestiary-launcher-v5-4-3-lifecycle-fix
+  SOURCE_RUN_ID: '32685695016'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Record publish run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --argjson run "$GITHUB_RUN_ID" '{version:"5.4.3",runId:$run,status:"publishing"}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v543/ci-publish-running.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=$SOURCE_BRANCH" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record Launcher 5.4.3 publish start [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record Launcher 5.4.3 publish start [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
+
+      - name: Download verified 5.4.3 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.3
+          path: publish
+          repository: aristheg201/codespaces-blank
+          run-id: 32685695016
+          github-token: ${{ github.token }}
+
+      - name: Verify exact built artifact
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.3.exe' -print -quit)"
+          HASHFILE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.3-SHA256.txt' -print -quit)"
+          CONTRACT="$(find publish -type f -name 'lifecycle-contract.txt' -print -quit)"
+          test -n "$EXE" && test -s "$EXE"
+          test -n "$HASHFILE" && test -s "$HASHFILE"
+          test -n "$CONTRACT" && test -s "$CONTRACT"
+          NORMALIZED="$(mktemp)"
+          tr -d '\r' < "$CONTRACT" > "$NORMALIZED"
+          grep -qx 'version=5.4.3' "$NORMALIZED"
+          grep -qx 'singleInstanceLockCount=1' "$NORMALIZED"
+          grep -qx 'secondInstanceRestoresWindow=true' "$NORMALIZED"
+          grep -qx 'activateRestoresWindow=true' "$NORMALIZED"
+          grep -qx 'lastWindowForcesExit=true' "$NORMALIZED"
+          grep -qx 'closeReopenRuntimeVerified=true' "$NORMALIZED"
+          grep -qx 'secondInvocationRuntimeVerified=true' "$NORMALIZED"
+          EXPECTED="$(tr -d '\r' < "$HASHFILE" | awk '{print tolower($1)}')"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          test "$ACTUAL" = '05cf27067e05a3eee9bbb2671a6a2fd016d09081ec4a65c1ea7d61438c7a0e83'
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+          echo "hashfile=$HASHFILE" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Launcher 5.4.3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXE: ${{ steps.verify.outputs.exe }}
+          HASHFILE: ${{ steps.verify.outputs.hashfile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release delete launcher-v5.4.3 --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          gh release create launcher-v5.4.3 "$EXE" "$HASHFILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Bestiary Launcher 5.4.3" \
+            --notes "Fixes Windows launcher lifecycle and relaunch behavior. The Electron single-instance lock is acquired once, a second invocation restores or recreates the existing window, and closing the final Windows/Linux launcher window terminates the launcher process. Verified by open -> close -> full process exit -> reopen plus second-instance runtime tests."
+
+      - name: Record verified 5.4.3 release marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg sha "$SHA256" --arg branch "$SOURCE_BRANCH" --argjson run "$SOURCE_RUN_ID" --argjson publishRun "$GITHUB_RUN_ID" '{version:"5.4.3",sha256:$sha,branch:$branch,runId:$run,publishRunId:$publishRun,singleInstanceLockCount:1,secondInstanceRestoresWindow:true,activateRestoresWindow:true,lastWindowForcesExit:true,closeReopenRuntimeVerified:true,secondInvocationRuntimeVerified:true,releasePublished:true,verified:true}')
+          ENC=$(printf '%s' "$BODY" | base64 -w0)
+          PATH_NAME='bestiary-v543/ci-build.json'
+          OLD=$(gh api "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME?ref=$SOURCE_BRANCH" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$OLD" ]; then
+            jq -nc --arg message 'Record verified Launcher 5.4.3 release [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" --arg sha "$OLD" '{message:$message,content:$content,branch:$branch,sha:$sha}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          else
+            jq -nc --arg message 'Record verified Launcher 5.4.3 release [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
+          fi
