@@ -25,6 +25,21 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
+      - name: Record 5.4.3 run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $body = [ordered]@{version='5.4.3';branch=$env:SOURCE_BRANCH;runId=[long]$env:GITHUB_RUN_ID;status='running'} | ConvertTo-Json -Compress
+          $enc = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
+          $path = 'bestiary-v543/ci-running.json'
+          $old = ''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$env:SOURCE_BRANCH" --jq '.sha' 2>$null | ForEach-Object { $old = $_ }
+          $payload = @{message='Record Launcher 5.4.3 CI start [skip ci]';content=$enc;branch=$env:SOURCE_BRANCH}
+          if ($old) { $payload.sha = $old }
+          ($payload | ConvertTo-Json -Compress) | gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
       - name: Checkout Launcher 5.4.3 source branch
         uses: actions/checkout@v4
         with:
