@@ -1,8 +1,8 @@
-name: Build Bestiary Launcher Android 1.0.5
+name: Build Bestiary Launcher Android 1.0.6
 
 on:
   push:
-    branches: [bestiary-android-v1-0-5-java21-defaults]
+    branches: [bestiary-android-v1-0-6-low-end-performance]
   workflow_dispatch:
 
 permissions:
@@ -68,16 +68,21 @@ jobs:
           python android-build/patch_bestiary_android_v102.py
           python android-build/patch_bestiary_android_v104_performance.py
           python android-build/patch_bestiary_android_v105_java21_defaults.py
+          python android-build/patch_bestiary_android_v106_low_end_performance.py
           APP=amethyst/app_pojavlauncher
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
-          grep -q 'versionName "1.0.5"' "$APP/build.gradle"
+          grep -q 'versionName "1.0.6"' "$APP/build.gradle"
           grep -q 'BestiaryAppUpdater.check(this)' "$APP/src/main/java/net/kdt/pojavlaunch/LauncherActivity.java"
           grep -q 'BestiaryPerformanceProfile.install(this)' "$APP/src/main/java/net/kdt/pojavlaunch/PojavApplication.java"
-          grep -q 'resolutionRatio' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'REVISION = 4' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'targetShortSide' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'sustainedPerformance", false' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'bigCoreAffinity", false' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
           grep -q 'return "";' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
           grep -q 'isLegacyGenerated' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
-          grep -q 'REVISION = 3' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
-          grep -q 'bigCoreAffinity", false' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryPerformanceProfile.java"
+          grep -q 'fullChunkRendering=' "$APP/src/main/java/net/kdt/pojavlaunch/Tools.java"
+          grep -q 'while (mixinPropertiesConfigStrings.remove(chunkDisable))' "$APP/src/main/java/net/kdt/pojavlaunch/Tools.java"
+          grep -q 'mixin.features.buffer_builder.intrinsics=false' "$APP/src/main/java/net/kdt/pojavlaunch/Tools.java"
           ! grep -q -- '-Xmx' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
           ! grep -q 'G1ReservePercent=15' "$APP/src/main/java/net/kdt/pojavlaunch/BestiaryJvmFlagGenerator.java"
           grep -q 'Khôi phục JVM mặc định' "$APP/src/main/res/xml/pref_java.xml"
@@ -100,31 +105,31 @@ jobs:
           set -euo pipefail
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.5.apk
-          sha256sum build-output/BestiaryLauncher-Android-1.0.5.apk > build-output/BestiaryLauncher-Android-1.0.5-SHA256.txt
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.6.apk
+          sha256sum build-output/BestiaryLauncher-Android-1.0.6.apk > build-output/BestiaryLauncher-Android-1.0.6-SHA256.txt
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.5.apk | tee build-output/BestiaryLauncher-Android-1.0.5-badging.txt
-          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.5-badging.txt
-          grep -q "versionName='1.0.5'" build-output/BestiaryLauncher-Android-1.0.5-badging.txt
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.6.apk | tee build-output/BestiaryLauncher-Android-1.0.6-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.6-badging.txt
+          grep -q "versionName='1.0.6'" build-output/BestiaryLauncher-Android-1.0.6-badging.txt
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.5.apk | tee build-output/BestiaryLauncher-Android-1.0.5-signing.txt
+          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.6.apk | tee build-output/BestiaryLauncher-Android-1.0.6-signing.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.5
+          name: BestiaryLauncher-Android-1.0.6
           path: build-output/*
           retention-days: 7
           if-no-files-found: error
-      - name: Publish Android 1.0.5 release
+      - name: Publish Android 1.0.6 release
         if: success() && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG='android-v1.0.5'
+          TAG='android-v1.0.6'
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher Android 1.0.5' --notes 'Android 1.0.5: Java 21 mặc định không ép G1 tuning. Tự gỡ đúng các JVM flags cũ do Bestiary 1.0.2/1.0.4 sinh ra, giữ nguyên JVM flags người dùng tự nhập; giảm heap mặc định cho máy yếu và không tự bật big-core affinity trên cài đặt mới. Giữ nguyên Minecraft 1.21.1, Fabric 0.18.4, mod sync, renderer policy và APK updater.'
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Bestiary Launcher Android 1.0.6' --notes 'Android 1.0.6: tối ưu cho máy yếu/Cobblemon. Giữ Java 21 defaults của 1.0.5; scale framebuffer theo RAM (432p-800p short side), không tự bật sustained-performance hoặc big-core affinity, force VSync vẫn tắt. Quan trọng: trên MobileGlues, tự gỡ cấu hình cũ đã vô hiệu Sodium chunk rendering để Sodium 0.6.13 chạy full chunk renderer; vẫn giữ buffer-builder intrinsic guard và giữ upstream conservative mitigation trên renderer chưa được xác thực.'
           fi
-          gh release upload "$TAG" build-output/BestiaryLauncher-Android-1.0.5.apk build-output/BestiaryLauncher-Android-1.0.5-SHA256.txt build-output/BestiaryLauncher-Android-1.0.5-signing.txt --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$TAG" build-output/BestiaryLauncher-Android-1.0.6.apk build-output/BestiaryLauncher-Android-1.0.6-SHA256.txt build-output/BestiaryLauncher-Android-1.0.6-signing.txt --repo "$GITHUB_REPOSITORY" --clobber
       - name: Publish verified Android CI manifest
         if: success() && github.event_name == 'push'
         env: { GH_TOKEN: '${{ github.token }}' }
@@ -132,15 +137,15 @@ jobs:
           set -euo pipefail
           python - <<'PY' > /tmp/result.json
           import json, os
-          sha=open('build-output/BestiaryLauncher-Android-1.0.5-SHA256.txt').read().split()[0]
-          print(json.dumps({'version':'1.0.5','variant':'java21-defaults','sha256':sha,'sourceCommit':os.environ['GITHUB_SHA'],'branch':os.environ['GITHUB_REF_NAME'],'runId':int(os.environ['GITHUB_RUN_ID']),'upstreamCommit':'360d708262ff703d9b52782d20cd348410a33df5','releasePublished':True,'verified':True}, indent=2))
+          sha=open('build-output/BestiaryLauncher-Android-1.0.6-SHA256.txt').read().split()[0]
+          print(json.dumps({'version':'1.0.6','variant':'low-end-performance','sha256':sha,'sourceCommit':os.environ['GITHUB_SHA'],'branch':os.environ['GITHUB_REF_NAME'],'runId':int(os.environ['GITHUB_RUN_ID']),'upstreamCommit':'360d708262ff703d9b52782d20cd348410a33df5','releasePublished':True,'verified':True}, indent=2))
           PY
           CONTENT="$(base64 -w0 /tmp/result.json)"
-          PATH_NAME="android-build/ci/latest-v105.json"
+          PATH_NAME="android-build/ci/latest-v106.json"
           OLD="$(gh api "repos/$GITHUB_REPOSITORY/contents/${PATH_NAME}?ref=$GITHUB_REF_NAME" --jq '.sha' 2>/dev/null || true)"
           python - "$CONTENT" "$OLD" <<'PY' > /tmp/payload.json
           import json,sys,os
-          p={'message':'Record published Bestiary Android 1.0.5 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
+          p={'message':'Record published Bestiary Android 1.0.6 [skip ci]','content':sys.argv[1],'branch':os.environ['GITHUB_REF_NAME']}
           if sys.argv[2]: p['sha']=sys.argv[2]
           print(json.dumps(p))
           PY
