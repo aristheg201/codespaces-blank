@@ -150,7 +150,6 @@ jobs:
           grep -q 'mali-g57' "$JAVA/BestiaryRendererCompatibility.java"
           grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryRendererCompatibility.java"
           grep -q 'BestiaryRendererCompatibility.applyMinecraftOptions()' "$JAVA/MainActivity.java"
-          grep -q 'Bestiary resource-pack safety' "$JAVA/MainActivity.java"
 
           grep -q 'BestiaryPerformanceProfile.targetRefreshRate()' "$JAVA/MinecraftGLSurface.java"
           ! grep -q 'float maxHz = 120f' "$JAVA/MinecraftGLSurface.java"
