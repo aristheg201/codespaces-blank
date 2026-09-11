@@ -139,8 +139,7 @@ jre.write_text(j, encoding='utf-8')
 
 # Sodium 0.6.13 no longer defines the two legacy rules that Amethyst's generic
 # workaround writes. Leaving them in sodium-mixins.properties produces warnings
-# and, worse, creates the illusion that a stability guard is active when it is
-# actually ignored. Remove only those exact obsolete Bestiary/Amethyst lines.
+# and creates the illusion that a stability guard is active when it is ignored.
 tools = JAVA / 'Tools.java'
 t = tools.read_text(encoding='utf-8')
 start = '        boolean hasSodiumMod = hasMods(sodiumMods);\n'
@@ -182,8 +181,7 @@ tools.write_text(t, encoding='utf-8')
 # Targeted compatibility policy for the failing hardware family. The server pack
 # contains thousands of textures and its second ResourceManager reload causes a
 # large texture-upload spike. On Mali-G57 + MobileGlues, disable Minecraft mipmaps
-# to cut texture allocation/upload work materially. Do not change user settings on
-# Adreno, Xclipse, LTW or Zink.
+# to cut texture allocation/upload work materially. Other renderers are untouched.
 compat_java = r'''package net.kdt.pojavlaunch;
 
 import android.util.Log;
@@ -216,7 +214,7 @@ public final class BestiaryRendererCompatibility {
         String oldMipmaps = MCOptionUtils.get("mipmapLevels");
         boolean changed = false;
         try {
-            if (oldMipmaps != null && Integer.parseInt(oldMipmaps) > 0) {
+            if (oldMipmaps == null || Integer.parseInt(oldMipmaps) > 0) {
                 MCOptionUtils.set("mipmapLevels", "0");
                 changed = true;
             }
@@ -234,9 +232,10 @@ public final class BestiaryRendererCompatibility {
 (JAVA / 'BestiaryRendererCompatibility.java').write_text(compat_java, encoding='utf-8')
 
 
-# MainActivity has already loaded options.txt in onCreate. initLayout then resolves
-# the actual renderer. Apply the targeted option policy immediately after that
-# renderer is known and before Minecraft starts.
+# MainActivity already loaded options.txt in onCreate. initLayout then resolves
+# the actual renderer. Apply the targeted option policy after renderer selection
+# and before Minecraft starts. This marker exists in the pinned Amethyst source
+# and is intentionally independent of Bestiary's evolving launch-info formatting.
 main = JAVA / 'MainActivity.java'
 m = main.read_text(encoding='utf-8')
 compat_hook = '            BestiaryRendererCompatibility.applyMinecraftOptions();\n'
@@ -244,16 +243,6 @@ if compat_hook not in m:
     needle = '            setTitle("Minecraft " + minecraftProfile.lastVersionId);\n'
     req(needle in m, 'MainActivity renderer-resolved marker missing')
     m = m.replace(needle, compat_hook + '\n' + needle, 1)
-
-# Capture memory policy in the launcher log immediately before entering JVM.
-needle = '        Tools.printLauncherInfo(mVersion, LauncherPreferences.PREF_CUSTOM_JAVA_ARGS, Tools.getTotalDeviceMemory(this));\n'
-req(needle in m, 'launcher info marker missing')
-m = m.replace(needle, needle + '''        Logger.appendToLog("Bestiary resource-pack safety: totalRam="
-                + Tools.getTotalDeviceMemory(this) + "MB configuredHeap="
-                + LauncherPreferences.PREF_RAM_ALLOCATION + "MB safeHeapCeiling="
-                + BestiaryPerformanceProfile.safeMaxHeapMb(Tools.getTotalDeviceMemory(this)) + "MB"
-                + " maliG57MobileGlues=" + BestiaryRendererCompatibility.isMaliG57MobileGlues());
-''', 1)
 main.write_text(m, encoding='utf-8')
 
 
@@ -276,5 +265,4 @@ req('mali-g57' in compat_text, 'Mali-G57 detection missing')
 req('MCOptionUtils.set("mipmapLevels", "0")' in compat_text, 'Mali-G57 mipmap safety policy missing')
 main_text = main.read_text(encoding='utf-8')
 req('BestiaryRendererCompatibility.applyMinecraftOptions()' in main_text, 'renderer compatibility hook missing')
-req('Bestiary resource-pack safety' in main_text, 'resource-pack safety telemetry missing')
 print('Bestiary Android 1.0.6 resource-pack renderer/memory stability hotfix applied')
