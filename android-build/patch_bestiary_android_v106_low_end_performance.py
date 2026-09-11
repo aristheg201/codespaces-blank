@@ -3,6 +3,7 @@ import re
 
 APP = Path('amethyst/app_pojavlauncher')
 JAVA = APP / 'src/main/java/net/kdt/pojavlaunch'
+RES = APP / 'src/main/res'
 
 
 def req(ok, message):
@@ -10,22 +11,53 @@ def req(ok, message):
         raise SystemExit(message)
 
 
-# ---------------------------------------------------------------------------
-# Bestiary Android 1.0.6: mobile-first performance policy.
-# - Keep Java 21 defaults from 1.0.5.
-# - Budget render resolution by RAM instead of blindly using most of a low-res
-#   display's native pixels.
-# - Do not auto-enable Android sustained-performance mode or big-core pinning.
-# - Keep Sodium's chunk renderer enabled on the Bestiary MobileGlues path while
-#   retaining upstream's conservative mitigation on other renderer backends.
-# ---------------------------------------------------------------------------
+# One consolidated 1.0.6 performance patch, applied directly after 1.0.2.
+# Historical 1.0.4/1.0.5 performance patches are intentionally not required.
 build = APP / 'build.gradle'
 s = build.read_text(encoding='utf-8')
-req('versionName "1.0.5"' in s, '1.0.5 versionName marker missing')
-s = s.replace('versionName "1.0.5"', 'versionName "1.0.6"', 1)
-if 'versionCode 10000005' in s:
-    s = s.replace('versionCode 10000005', 'versionCode 10000006', 1)
+req('versionName "1.0.2"' in s, '1.0.2 versionName marker missing')
+s = s.replace('versionName "1.0.2"', 'versionName "1.0.6"', 1)
+if 'versionCode 10000003' in s:
+    s = s.replace('versionCode 10000003', 'versionCode 10000006', 1)
 build.write_text(s, encoding='utf-8')
+
+
+# Java 21 defaults. Keep the class because settings code calls it, but do not
+# inject desktop/server GC recipes into Android. Only migrate exact Bestiary
+# strings from already-installed 1.0.2/1.0.4 builds.
+generator_java = r'''package net.kdt.pojavlaunch;
+
+import android.content.Context;
+
+public final class BestiaryJvmFlagGenerator {
+    private static final String[] LEGACY_GENERATED = new String[] {
+            "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC -Dfile.encoding=UTF-8",
+            "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC -XX:+UseStringDeduplication -Dfile.encoding=UTF-8",
+            "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=75 -XX:G1ReservePercent=15 -XX:InitiatingHeapOccupancyPercent=30 -XX:+DisableExplicitGC -Dfile.encoding=UTF-8",
+            "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=75 -XX:G1ReservePercent=15 -XX:InitiatingHeapOccupancyPercent=30 -XX:+DisableExplicitGC -XX:+UseStringDeduplication -Dfile.encoding=UTF-8"
+    };
+
+    private BestiaryJvmFlagGenerator() {}
+
+    public static String generate(Context context) {
+        return "";
+    }
+
+    public static boolean isLegacyGenerated(String args) {
+        String normalized = normalize(args);
+        if (normalized.isEmpty()) return false;
+        for (String legacy : LEGACY_GENERATED) {
+            if (legacy.equals(normalized)) return true;
+        }
+        return false;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ");
+    }
+}
+'''
+(JAVA / 'BestiaryJvmFlagGenerator.java').write_text(generator_java, encoding='utf-8')
 
 
 profile_java = r'''package net.kdt.pojavlaunch;
@@ -63,72 +95,39 @@ public final class BestiaryPerformanceProfile {
 
         int targetHeap = defaultHeapMb(ram);
         int targetRatio = defaultResolutionRatio(ram, minSide);
-        int oldAutoHeap = oldV104HeapMb(ram);
-        int oldAutoRatio = oldV104ResolutionRatio(minSide);
         int currentHeap = prefs.getInt("allocation", -1);
         int currentRatio = prefs.getInt("resolutionRatio", -1);
 
-        // Exact old generated values + a Bestiary-managed JVM profile are strong
-        // provenance that these values were launcher defaults, not user choices.
-        boolean migrateManagedPerformance = !freshBestiary
-                && java21Managed
-                && currentRatio == oldAutoRatio;
+        // Recognize exact older Bestiary-generated defaults so upgrades can be
+        // corrected without overwriting arbitrary user tuning.
+        boolean legacyManagedValues = !freshBestiary && java21Managed
+                && isLegacyAutoRatio(currentRatio, minSide);
 
         SharedPreferences.Editor edit = prefs.edit();
-        boolean heapChanged = false;
-        boolean ratioChanged = false;
-        boolean sustainedChanged = false;
-        boolean affinityChanged = false;
-
         if (freshBestiary || currentHeap < 0) {
             edit.putInt("allocation", targetHeap);
             currentHeap = targetHeap;
-            heapChanged = true;
-        } else if (migrateManagedPerformance && currentHeap == oldAutoHeap && targetHeap != currentHeap) {
+        } else if (legacyManagedValues && isLegacyAutoHeap(currentHeap, ram)) {
             edit.putInt("allocation", targetHeap);
             currentHeap = targetHeap;
-            heapChanged = true;
         }
 
         if (freshBestiary || currentRatio < 0) {
             edit.putInt("resolutionRatio", targetRatio);
             currentRatio = targetRatio;
-            ratioChanged = true;
-        } else if (migrateManagedPerformance && currentRatio != targetRatio) {
+        } else if (legacyManagedValues && currentRatio != targetRatio) {
             edit.putInt("resolutionRatio", targetRatio);
             currentRatio = targetRatio;
-            ratioChanged = true;
         }
 
-        // Sustained performance mode is an energy/thermal stability policy, not
-        // a universal FPS boost. Default it off and let users opt in if their
-        // device specifically benefits during long sessions.
-        boolean oldAutoSustained = cores >= 6;
-        if (freshBestiary || !prefs.contains("sustainedPerformance")) {
+        // Do not auto-enable sustained mode or static big-core pinning. Both can
+        // worsen long-session frame pacing on thermally constrained phones.
+        if (freshBestiary || !prefs.contains("sustainedPerformance") || legacyManagedValues) {
             edit.putBoolean("sustainedPerformance", false);
-            sustainedChanged = true;
-        } else if (migrateManagedPerformance
-                && prefs.getBoolean("sustainedPerformance", false) == oldAutoSustained
-                && oldAutoSustained) {
-            edit.putBoolean("sustainedPerformance", false);
-            sustainedChanged = true;
         }
-
-        // Static big-core pinning can cause a quick thermal spike and then worse
-        // frame pacing. Android's scheduler has better live thermal information.
-        boolean oldAutoAffinity = cores >= 8;
-        if (freshBestiary || !prefs.contains("bigCoreAffinity")) {
+        if (freshBestiary || !prefs.contains("bigCoreAffinity") || legacyManagedValues) {
             edit.putBoolean("bigCoreAffinity", false);
-            affinityChanged = true;
-        } else if (migrateManagedPerformance
-                && prefs.getBoolean("bigCoreAffinity", false) == oldAutoAffinity
-                && oldAutoAffinity) {
-            edit.putBoolean("bigCoreAffinity", false);
-            affinityChanged = true;
         }
-
-        // Avoid double throttling/pacing. Minecraft/Sodium can still apply their
-        // own FPS cap; the Android surface should not force VSync on top of it.
         if (freshBestiary || !prefs.contains("force_vsync")) edit.putBoolean("force_vsync", false);
         if (freshBestiary || !prefs.contains("alternate_surface")) edit.putBoolean("alternate_surface", true);
 
@@ -143,16 +142,11 @@ public final class BestiaryPerformanceProfile {
         }
 
         edit.putInt(REVISION_KEY, REVISION).apply();
-        Log.i(TAG, "rev=" + previousRevision + "->" + REVISION
-                + " ramMb=" + ram + " cores=" + cores + " minSide=" + minSide
-                + " heapMb=" + currentHeap + " ratio=" + currentRatio
-                + " targetShortSide=" + targetShortSide(ram)
-                + " jvmMode=" + currentJvmMode
-                + " migrated=" + migrateManagedPerformance
-                + " heapChanged=" + heapChanged
-                + " ratioChanged=" + ratioChanged
-                + " sustainedChanged=" + sustainedChanged
-                + " affinityChanged=" + affinityChanged);
+        Log.i(TAG, "revision=" + previousRevision + "->" + REVISION
+                + " ramMb=" + ram + " cores=" + cores
+                + " minSide=" + minSide + " heapMb=" + currentHeap
+                + " ratio=" + currentRatio + " targetShortSide=" + targetShortSide(ram)
+                + " jvmMode=" + currentJvmMode + " migrated=" + legacyManagedValues);
     }
 
     private static int defaultHeapMb(int ramMb) {
@@ -177,112 +171,129 @@ public final class BestiaryPerformanceProfile {
         int target = targetShortSide(ramMb);
         if (minSide <= target) return 100;
         int raw = (target * 100) / minSide;
-        // Amethyst's resolution slider advances in 5-point steps. Round down so
-        // the selected framebuffer never exceeds the intended pixel budget.
         int ratio = (raw / 5) * 5;
         if (ratio < 25) ratio = 25;
         if (ratio > 100) ratio = 100;
         return ratio;
     }
 
-    private static int oldV104HeapMb(int ramMb) {
-        return ramMb >= 8192 ? 3072 : ramMb >= 6144 ? 2560 : ramMb >= 4096 ? 2048 : 1536;
+    private static boolean isLegacyAutoHeap(int heap, int ramMb) {
+        int v104 = ramMb >= 8192 ? 3072 : ramMb >= 6144 ? 2560 : ramMb >= 4096 ? 2048 : 1536;
+        int v105 = ramMb >= 11000 ? 3072 : ramMb >= 7500 ? 2560 : ramMb >= 5500 ? 2048 : ramMb >= 3800 ? 1536 : ramMb >= 2800 ? 1280 : 1024;
+        return heap == v104 || heap == v105;
     }
 
-    private static int oldV104ResolutionRatio(int minSide) {
-        return minSide >= 1440 ? 55 : minSide >= 1080 ? 65 : minSide >= 900 ? 75 : 85;
+    private static boolean isLegacyAutoRatio(int ratio, int minSide) {
+        int v104 = minSide >= 1440 ? 55 : minSide >= 1080 ? 65 : minSide >= 900 ? 75 : 85;
+        return ratio == v104;
     }
 }
 '''
 (JAVA / 'BestiaryPerformanceProfile.java').write_text(profile_java, encoding='utf-8')
 
 
-# ---------------------------------------------------------------------------
-# Sodium compatibility/performance.
-# Upstream assumes Sodium reaches launch only through its explicit force-run
-# path and therefore disables Sodium chunk rendering for stability. Bestiary
-# deliberately ships Sodium in the Android profile and defaults to MobileGlues,
-# so that assumption no longer applies. Keep the buffer-builder intrinsic guard,
-# but do not disable Sodium's chunk renderer on MobileGlues. Other backends keep
-# the upstream conservative behavior.
-# ---------------------------------------------------------------------------
+# Install the profile before the second preference load so new values take
+# effect in the same process. This hook did not exist in the 1.0.2 baseline.
+app = JAVA / 'PojavApplication.java'
+s = app.read_text(encoding='utf-8')
+if 'BestiaryPerformanceProfile.install(this);' not in s:
+    needle = '\t\t\t\tLauncherPreferences.loadPreferences(this);\n'
+    req(needle in s, 'PojavApplication preference load marker missing')
+    s = s.replace(needle, needle + '\t\t\t\tBestiaryPerformanceProfile.install(this);\n\t\t\t\tLauncherPreferences.loadPreferences(this);\n', 1)
+app.write_text(s, encoding='utf-8')
+
+
+# Replace the old one-click generated-G1 button with an explicit reset to Java
+# 21 defaults. RAM allocation stays independent from JVM arguments.
+pref_java = RES / 'xml/pref_java.xml'
+x = pref_java.read_text(encoding='utf-8')
+req('android:key="bestiary_generate_jvm_flags"' in x, 'Bestiary JVM preference missing')
+x = x.replace('android:title="Tạo JVM flags tự động"', 'android:title="Khôi phục JVM mặc định"')
+x = x.replace(
+    'android:summary="Sinh bộ flag Java 21 an toàn theo RAM đã cấp. Không ghi đè giới hạn RAM."',
+    'android:summary="Khuyên dùng trên Android: để Java 21 tự chọn GC/ergonomics. Xóa JVM flags tùy chỉnh nhưng không đổi RAM."'
+)
+pref_java.write_text(x, encoding='utf-8')
+
+java_fragment = JAVA / 'prefs/screens/LauncherPreferenceJavaFragment.java'
+s = java_fragment.read_text(encoding='utf-8')
+old = '''        requirePreference("bestiary_generate_jvm_flags").setOnPreferenceClickListener(preference -> {
+            String generated = BestiaryJvmFlagGenerator.generate(requireContext());
+            LauncherPreferences.DEFAULT_PREF.edit().putString("javaArgs", generated).apply();
+            LauncherPreferences.PREF_CUSTOM_JAVA_ARGS = generated;
+            if (editJVMArgs != null) editJVMArgs.setText(generated);
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("JVM FLAGS ĐÃ TẠO")
+                    .setMessage(generated)
+                    .setPositiveButton("OK", null)
+                    .show();
+            return true;
+        });'''
+req(old in s, '1.0.2 JVM generator handler missing')
+new = '''        requirePreference("bestiary_generate_jvm_flags").setOnPreferenceClickListener(preference -> {
+            LauncherPreferences.DEFAULT_PREF.edit()
+                    .putString("javaArgs", "")
+                    .putString("bestiary_jvm_mode", "JAVA21_DEFAULTS")
+                    .apply();
+            LauncherPreferences.PREF_CUSTOM_JAVA_ARGS = "";
+            if (editJVMArgs != null) editJVMArgs.setText("");
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("JVM MẶC ĐỊNH JAVA 21")
+                    .setMessage("Đã xóa JVM flags tùy chỉnh. Bestiary dùng GC và JVM ergonomics mặc định của Java 21; giới hạn RAM giữ nguyên.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return true;
+        });'''
+s = s.replace(old, new, 1)
+java_fragment.write_text(s, encoding='utf-8')
+
+
+# Sodium: Bestiary deliberately ships Sodium on Android. Upstream Amethyst's
+# generic force-run mitigation disables Sodium chunk rendering. Keep the safer
+# buffer-builder intrinsic guard but restore the chunk renderer on MobileGlues.
 tools = JAVA / 'Tools.java'
 t = tools.read_text(encoding='utf-8')
-pattern = re.compile(
-    r'''        // We only ever reach this point when user has already used the force run switch\n'''
-    r'''        boolean hasSodiumMod = false;\n'''
-    r'''        for \(String modName : sodiumMods\) \{\n'''
-    r'''            if \(hasMods\(sodiumMods\)\) \{\n'''
-    r'''                hasSodiumMod = true;\n'''
-    r'''                File mixinPropertiesConfigFile = new File\(getGameDir\(\), "config/" \+ modName \+ "-mixins.properties"\);\n'''
-    r'''                // Write mixin configs to somewhat help stability\. We don't want more people complaining\.\n'''
-    r'''                String\[\] propertiesToAdd = \{\n'''
-    r'''                        "mixin\.features\.buffer_builder\.intrinsics=false",\n'''
-    r'''                        "mixin\.features\.chunk_rendering=false"\n'''
-    r'''                \};\n'''
-    r'''                List<String> mixinPropertiesConfigStrings = null;\n'''
-    r'''                try \{\n'''
-    r'''                    mixinPropertiesConfigStrings = org\.apache\.commons\.io\.FileUtils\.readLines\(mixinPropertiesConfigFile, "UTF-8"\);\n'''
-    r'''                \} catch \(IOException ignored\) \{\}\n'''
-    r'''                if \(mixinPropertiesConfigStrings == null\) \{\n'''
-    r'''                    mixinPropertiesConfigStrings = new ArrayList<>\(\);\n'''
-    r'''                \}\n'''
-    r'''                for \(String newLine : propertiesToAdd\) \{\n'''
-    r'''                    if \(!mixinPropertiesConfigStrings\.contains\(newLine\)\) \{\n'''
-    r'''                        mixinPropertiesConfigStrings\.add\(newLine\);\n'''
-    r'''                    \}\n'''
-    r'''                \}\n'''
-    r'''                try \{\n'''
-    r'''                    org\.apache\.commons\.io\.FileUtils\.writeLines\(mixinPropertiesConfigFile, mixinPropertiesConfigStrings\);\n'''
-    r'''                \} catch \(IOException ignored\) \{\} // If we can't write it, we tried our best\.\n'''
-    r'''\n'''
-    r'''            \}\n'''
-    r'''        \}\n''',
-    re.M,
-)
-match = pattern.search(t)
-req(match is not None, 'upstream Sodium mitigation block missing')
+start = '        // We only ever reach this point when user has already used the force run switch\n        boolean hasSodiumMod = false;\n'
+start_at = t.find(start)
+req(start_at >= 0, 'upstream Sodium mitigation start missing')
+end_marker = '        // We use a janky lwjgl setup. We don\'t want more people complaining it crashes.\n'
+end_at = t.find(end_marker, start_at)
+req(end_at > start_at, 'upstream Sodium mitigation end missing')
 replacement = r'''        boolean hasSodiumMod = hasMods(sodiumMods);
         if (hasSodiumMod) {
             boolean bestiaryMobileGlues = "opengles_mobileglues".equals(Tools.LOCAL_RENDERER);
             for (String modName : sodiumMods) {
                 if (!hasMods(modName)) continue;
                 File mixinPropertiesConfigFile = new File(getGameDir(), "config/" + modName + "-mixins.properties");
-                List<String> mixinPropertiesConfigStrings = null;
+                List<String> lines = null;
                 try {
-                    mixinPropertiesConfigStrings = org.apache.commons.io.FileUtils.readLines(mixinPropertiesConfigFile, "UTF-8");
+                    lines = org.apache.commons.io.FileUtils.readLines(mixinPropertiesConfigFile, "UTF-8");
                 } catch (IOException ignored) {}
-                if (mixinPropertiesConfigStrings == null) mixinPropertiesConfigStrings = new ArrayList<>();
+                if (lines == null) lines = new ArrayList<>();
 
                 String intrinsicGuard = "mixin.features.buffer_builder.intrinsics=false";
-                if (!mixinPropertiesConfigStrings.contains(intrinsicGuard)) {
-                    mixinPropertiesConfigStrings.add(intrinsicGuard);
-                }
+                if (!lines.contains(intrinsicGuard)) lines.add(intrinsicGuard);
 
                 String chunkDisable = "mixin.features.chunk_rendering=false";
                 if (bestiaryMobileGlues) {
-                    // Migrate the line written by older Bestiary/Amethyst builds.
-                    // This restores Sodium's primary chunk-rendering optimization.
-                    while (mixinPropertiesConfigStrings.remove(chunkDisable)) {}
-                } else if (!mixinPropertiesConfigStrings.contains(chunkDisable)) {
-                    // Preserve upstream stability behavior on unvalidated backends.
-                    mixinPropertiesConfigStrings.add(chunkDisable);
+                    while (lines.remove(chunkDisable)) {}
+                } else if (!lines.contains(chunkDisable)) {
+                    lines.add(chunkDisable);
                 }
 
                 try {
-                    org.apache.commons.io.FileUtils.writeLines(mixinPropertiesConfigFile, mixinPropertiesConfigStrings);
+                    org.apache.commons.io.FileUtils.writeLines(mixinPropertiesConfigFile, lines);
                 } catch (IOException ignored) {}
                 Log.i("BestiarySodium", "renderer=" + Tools.LOCAL_RENDERER
-                        + " mod=" + modName
-                        + " fullChunkRendering=" + bestiaryMobileGlues);
+                        + " mod=" + modName + " fullChunkRendering=" + bestiaryMobileGlues);
             }
         }
 '''
-t = t[:match.start()] + replacement + t[match.end():]
+t = t[:start_at] + replacement + t[end_at:]
 tools.write_text(t, encoding='utf-8')
 
 
-# Keep network provenance aligned with the installed Android version.
+# Keep network provenance aligned with this build.
 for name in ('BestiaryBootstrap.java', 'BestiaryAppUpdater.java'):
     path = JAVA / name
     if path.is_file():
@@ -291,17 +302,14 @@ for name in ('BestiaryBootstrap.java', 'BestiaryAppUpdater.java'):
         path.write_text(text, encoding='utf-8')
 
 
-# Contract checks before Gradle spends time compiling.
+# Pre-build contract checks.
 req('versionName "1.0.6"' in build.read_text(encoding='utf-8'), '1.0.6 version missing')
-profile = (JAVA / 'BestiaryPerformanceProfile.java').read_text(encoding='utf-8')
-req('REVISION = 4' in profile, 'performance profile revision 4 missing')
-req('targetShortSide' in profile, 'target short-side resolution budget missing')
-req('sustainedPerformance", false' in profile, 'sustained performance safe default missing')
-req('bigCoreAffinity", false' in profile, 'affinity safe default missing')
-req('oldV104ResolutionRatio' in profile, 'managed v1.0.4 resolution migration missing')
-tools_text = tools.read_text(encoding='utf-8')
-req('fullChunkRendering=' in tools_text, 'Bestiary Sodium renderer policy missing')
-req('while (mixinPropertiesConfigStrings.remove(chunkDisable)) {}' in tools_text, 'stale Sodium chunk-disable migration missing')
-req('mixin.features.buffer_builder.intrinsics=false' in tools_text, 'Sodium intrinsic stability guard missing')
-req('if (bestiaryMobileGlues)' in tools_text, 'MobileGlues Sodium conditional missing')
-print('Bestiary Android 1.0.6 low-end render/Sodium performance patch applied')
+req('return "";' in (JAVA / 'BestiaryJvmFlagGenerator.java').read_text(encoding='utf-8'), 'Java 21 defaults missing')
+req('REVISION = 4' in (JAVA / 'BestiaryPerformanceProfile.java').read_text(encoding='utf-8'), 'performance revision missing')
+req('targetShortSide' in (JAVA / 'BestiaryPerformanceProfile.java').read_text(encoding='utf-8'), 'resolution budget missing')
+req('BestiaryPerformanceProfile.install(this)' in app.read_text(encoding='utf-8'), 'performance startup hook missing')
+req('Khôi phục JVM mặc định' in pref_java.read_text(encoding='utf-8'), 'JVM reset UI missing')
+req('JVM MẶC ĐỊNH JAVA 21' in java_fragment.read_text(encoding='utf-8'), 'JVM reset handler missing')
+req('fullChunkRendering=' in tools.read_text(encoding='utf-8'), 'Sodium renderer policy missing')
+req('mixin.features.buffer_builder.intrinsics=false' in tools.read_text(encoding='utf-8'), 'Sodium intrinsic guard missing')
+print('Bestiary Android 1.0.6 consolidated mobile performance patch applied')
