@@ -1,6 +1,8 @@
 name: Build Bestiary Android 1.0.6 Resource-Pack Fix
 
 on:
+  push:
+    branches: [bestiary-android-v1-0-6-low-end-performance]
   workflow_dispatch:
 
 permissions:
