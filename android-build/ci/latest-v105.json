@@ -1,0 +1,11 @@
+{
+  "version": "1.0.5",
+  "variant": "java21-defaults",
+  "sha256": "6e8497ccd7baa5c66b9561bbe5629d89a1fb2a6f0647080c13783752d4b23f8a",
+  "sourceCommit": "11f6a8e4ffd9e29485916eb10b27bb3a1553f38f",
+  "branch": "bestiary-android-v1-0-5-java21-defaults",
+  "runId": 34549190241,
+  "upstreamCommit": "360d708262ff703d9b52782d20cd348410a33df5",
+  "releasePublished": true,
+  "verified": true
+}
