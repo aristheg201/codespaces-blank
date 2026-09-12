@@ -1,0 +1,1 @@
+Bestiary Android 1.0.0 clean CI trigger.
