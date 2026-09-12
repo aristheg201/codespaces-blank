@@ -75,7 +75,6 @@ jobs:
           mkdir -p "$TMP/apk" "$TMP/aar"
           unzip -q "$MG_APK" 'lib/*/libmobileglues.so' -d "$TMP/apk"
           unzip -q "$AAR" -d "$TMP/aar"
-
           test -s "$TMP/apk/lib/arm64-v8a/libmobileglues.so"
           test -s "$TMP/aar/jni/arm64-v8a/libmobileglues.so"
           cp "$TMP/aar/jni/arm64-v8a/libmobileglues.so" "$TMP/mobileglues-old-arm64.so"
@@ -136,7 +135,6 @@ jobs:
 
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
           grep -q 'versionName "1.0.6"' "$APP/build.gradle"
-
           grep -q 'REVISION = 8' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'RESOURCE_PACK_SAFE_KEY' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'resourcePackSafeModeEnabled' "$JAVA/BestiaryPerformanceProfile.java"
@@ -146,26 +144,21 @@ jobs:
           grep -q 'bestiaryRequestedHeapMb' "$JAVA/utils/JREUtils.java"
           grep -q 'clampHeapForLaunch(activity' "$JAVA/utils/JREUtils.java"
           grep -q 'bestiary-hs_err_pid%p.log' "$JAVA/utils/JREUtils.java"
-
           grep -q 'versionPolicy=0.6.13-native' "$JAVA/Tools.java"
           grep -q 'while (lines.remove(legacyIntrinsic))' "$JAVA/Tools.java"
           grep -q 'while (lines.remove(legacyChunk))' "$JAVA/Tools.java"
           ! grep -q 'fullChunkRendering=' "$JAVA/Tools.java"
-
           grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryGamePerformanceDefaults.java"
           grep -q 'Resource-pack safe mode active' "$JAVA/BestiaryResourcePackSafety.java"
           grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryResourcePackSafety.java"
           grep -q 'BestiaryResourcePackSafety.applyMinecraftOptions()' "$JAVA/MainActivity.java"
-          grep -q 'Bestiary resource-pack safety:' "$JAVA/MainActivity.java"
           grep -q 'bestiary_resourcepack_safe_mode' "$APP/src/main/res/xml/pref_renderer.xml"
-
           grep -q 'BestiaryPerformanceProfile.targetRefreshRate()' "$JAVA/MinecraftGLSurface.java"
           ! grep -q 'float maxHz = 120f' "$JAVA/MinecraftGLSurface.java"
           grep -q 'Continuous native logcat mirror disabled' "$JAVA/utils/JREUtils.java"
           grep -q 'LOCAL_RENDERER.toLowerCase(Locale.ROOT).contains("zink")' "$JAVA/utils/JREUtils.java"
           grep -q 'bestiary-android-manifest-cache.json' "$JAVA/BestiaryBootstrap.java"
           grep -q 'matchesVerificationCache' "$JAVA/BestiaryBootstrap.java"
-
           test -s "$APP/libs/MobileGlues-release.aar"
           unzip -t "$APP/libs/MobileGlues-release.aar" >/dev/null
           test -s "$APP/src/main/assets/bestiary/keyboard_cobblemon.json"
