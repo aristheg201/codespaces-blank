@@ -2,6 +2,7 @@ from pathlib import Path
 
 APP = Path('amethyst/app_pojavlauncher')
 JAVA = APP / 'src/main/java/net/kdt/pojavlaunch'
+RES = APP / 'src/main/res'
 
 
 def req(ok, message):
@@ -10,20 +11,27 @@ def req(ok, message):
 
 
 # ---------------------------------------------------------------------------
-# Bestiary Android 1.0.6 resource-pack stability hotfix.
-# Resource reload temporarily duplicates decoded textures/models while the old
-# GPU/native resources are still alive. Android therefore needs native headroom.
-# The OPPO/Mali-G57 failure also exposed a renderer-specific texture reload path,
-# so this hotfix contains both the memory safety invariant and the targeted
-# Mali-G57 + MobileGlues compatibility profile.
+# Bestiary Android 1.0.6 resource-pack stability hardening.
+#
+# Server resource packs can have a small ZIP size while expanding into hundreds
+# of MiB of decoded RGBA data. During ResourceManager reload, old and new
+# resources can overlap transiently and texture staging/native driver memory can
+# dominate the process. The safety policy therefore targets native/GPU headroom,
+# not just Java heap size, and applies to every renderer by default.
 # ---------------------------------------------------------------------------
 profile = JAVA / 'BestiaryPerformanceProfile.java'
 s = profile.read_text(encoding='utf-8')
 req('private static final int REVISION = 6;' in s, 'performance revision 6 marker missing')
-s = s.replace('private static final int REVISION = 6;', 'private static final int REVISION = 7;', 1)
+s = s.replace('private static final int REVISION = 6;', 'private static final int REVISION = 8;', 1)
 
-# Clamp persisted allocation on every profile migration, including arbitrary old
-# user values. This is a safety invariant rather than a performance preference.
+verbose_key = '    private static final String VERBOSE_NATIVE_LOG_KEY = "bestiary_verbose_native_log";\n'
+req(verbose_key in s, 'verbose native log key marker missing')
+s = s.replace(
+    verbose_key,
+    verbose_key + '    private static final String RESOURCE_PACK_SAFE_KEY = "bestiary_resourcepack_safe_mode";\n',
+    1,
+)
+
 old = '''        int targetHeap = defaultHeapMb(ram);
         int targetRatio = defaultResolutionRatio(ram, minSide);
         int currentHeap = prefs.getInt("allocation", -1);
@@ -63,6 +71,14 @@ new = '''        if (!prefs.contains("allocation")) {
         }'''
 s = s.replace(old, new, 1)
 
+safe_pref_marker = '        if (!prefs.contains(VERBOSE_NATIVE_LOG_KEY)) edit.putBoolean(VERBOSE_NATIVE_LOG_KEY, false);\n'
+req(safe_pref_marker in s, 'performance default preference marker missing')
+s = s.replace(
+    safe_pref_marker,
+    safe_pref_marker + '        if (!prefs.contains(RESOURCE_PACK_SAFE_KEY)) edit.putBoolean(RESOURCE_PACK_SAFE_KEY, true);\n',
+    1,
+)
+
 old = '''    public static int initialHeapMb(int maxHeapMb) {
         if (maxHeapMb <= 768) return 128;
         if (maxHeapMb <= 1536) return 256;
@@ -80,15 +96,16 @@ new = '''    public static int initialHeapMb(int maxHeapMb) {
     }
 
     /**
-     * Hard Android safety ceiling. Reserve room for JVM native structures,
-     * decoded resource-pack images, OpenGL/MobileGlues allocations and Android.
+     * Android hard ceiling for the Java heap. Resource-pack decoding and texture
+     * upload consume substantial native/GPU memory outside -Xmx, so allowing the
+     * JVM to approach total device RAM makes LMKD/native OOM much more likely.
      */
     public static int safeMaxHeapMb(int totalRamMb) {
         if (totalRamMb >= 12000) return 4096;
         if (totalRamMb >= 7500) return 3072;
         if (totalRamMb >= 5500) return 2560;
-        if (totalRamMb >= 3800) return 2048;
-        if (totalRamMb >= 2800) return 1536;
+        if (totalRamMb >= 3800) return 1792;
+        if (totalRamMb >= 2800) return 1280;
         return 1024;
     }
 
@@ -103,6 +120,11 @@ new = '''    public static int initialHeapMb(int maxHeapMb) {
         return clamped;
     }
 
+    public static boolean resourcePackSafeModeEnabled() {
+        SharedPreferences prefs = LauncherPreferences.DEFAULT_PREF;
+        return prefs == null || prefs.getBoolean(RESOURCE_PACK_SAFE_KEY, true);
+    }
+
     public static float targetRefreshRate() {'''
 s = s.replace(old, new, 1)
 
@@ -115,8 +137,21 @@ s = s.replace(old, '''                + " minSide=" + minSide + " xmxMb=" + curr
 profile.write_text(s, encoding='utf-8')
 
 
-# Runtime enforcement: even if preferences/static fields are stale, the embedded
-# JVM cannot launch above the Android safety ceiling.
+# First-run options from the consolidated v1.0.6 patch must never request
+# mipmaps on the low-end profile. Existing users are handled by the runtime safe
+# mode below, and can explicitly opt out in Renderer settings if desired.
+game_defaults = JAVA / 'BestiaryGamePerformanceDefaults.java'
+g = game_defaults.read_text(encoding='utf-8')
+old_mipmap_default = '        MCOptionUtils.set("mipmapLevels", "2");\n'
+req(old_mipmap_default in g, 'first-run mipmap level 2 marker missing')
+g = g.replace(old_mipmap_default, '        MCOptionUtils.set("mipmapLevels", "0");\n', 1)
+game_defaults.write_text(g, encoding='utf-8')
+
+
+# Runtime enforcement: SharedPreferences/static fields can be stale, so clamp
+# again at the actual JVM launch boundary. Also write HotSpot fatal-error logs to
+# the instance log directory; this is essentially free during normal execution
+# and gives us evidence if the next failure is a native SIGSEGV instead of LMKD.
 jre = JAVA / 'utils/JREUtils.java'
 j = jre.read_text(encoding='utf-8')
 old = '''        int bestiaryMaxHeapMb = LauncherPreferences.PREF_RAM_ALLOCATION;
@@ -131,15 +166,30 @@ new = '''        int bestiaryRequestedHeapMb = LauncherPreferences.PREF_RAM_ALLO
         int bestiaryInitialHeapMb = BestiaryPerformanceProfile.initialHeapMb(bestiaryMaxHeapMb);
         userArgs.add("-Xms" + bestiaryInitialHeapMb + "M");
         userArgs.add("-Xmx" + bestiaryMaxHeapMb + "M");
+
+        File bestiaryCrashDir = new File(gameDirectory, "logs");
+        if (!bestiaryCrashDir.isDirectory()) bestiaryCrashDir.mkdirs();
+        boolean hasHotspotErrorFile = false;
+        for (String arg : userArgs) {
+            if (arg != null && arg.startsWith("-XX:ErrorFile=")) {
+                hasHotspotErrorFile = true;
+                break;
+            }
+        }
+        String bestiaryErrorFile = new File(bestiaryCrashDir, "bestiary-hs_err_pid%p.log").getAbsolutePath();
+        if (!hasHotspotErrorFile) userArgs.add("-XX:ErrorFile=" + bestiaryErrorFile);
+
         Logger.appendToLog("Bestiary memory policy: requested=" + bestiaryRequestedHeapMb
-                + "M Xms=" + bestiaryInitialHeapMb + "M Xmx=" + bestiaryMaxHeapMb + "M");'''
+                + "M Xms=" + bestiaryInitialHeapMb + "M Xmx=" + bestiaryMaxHeapMb
+                + "M safeMode=" + BestiaryPerformanceProfile.resourcePackSafeModeEnabled()
+                + " hotspotErrorFile=" + (hasHotspotErrorFile ? "custom" : bestiaryErrorFile));'''
 j = j.replace(old, new, 1)
 jre.write_text(j, encoding='utf-8')
 
 
 # Sodium 0.6.13 no longer defines the two legacy rules that Amethyst's generic
-# workaround writes. Leaving them in sodium-mixins.properties produces warnings
-# and creates the illusion that a stability guard is active when it is ignored.
+# workaround writes. Remove only those exact obsolete lines rather than claiming
+# a protection that Sodium ignores.
 tools = JAVA / 'Tools.java'
 t = tools.read_text(encoding='utf-8')
 start = '        boolean hasSodiumMod = hasMods(sodiumMods);\n'
@@ -178,91 +228,107 @@ t = t[:start_at] + sodium_policy + t[end_at:]
 tools.write_text(t, encoding='utf-8')
 
 
-# Targeted compatibility policy for the failing hardware family. The server pack
-# contains thousands of textures and its second ResourceManager reload causes a
-# large texture-upload spike. On Mali-G57 + MobileGlues, disable Minecraft mipmaps
-# to cut texture allocation/upload work materially. Other renderers are untouched.
-compat_java = r'''package net.kdt.pojavlaunch;
+# Resource-pack safety is not a Mali-G57 special case. The measured Bestiary
+# server pack expands to hundreds of MiB of RGBA textures, and mip levels amplify
+# that on every backend. Default safe mode forces Minecraft mipmaps to zero before
+# the game starts. Users can opt out explicitly in Renderer settings.
+safety_java = r'''package net.kdt.pojavlaunch;
 
 import android.util.Log;
 
-import net.kdt.pojavlaunch.utils.GLInfoUtils;
 import net.kdt.pojavlaunch.utils.MCOptionUtils;
 
-import java.util.Locale;
+public final class BestiaryResourcePackSafety {
+    private static final String TAG = "BestiaryResourcePack";
 
-public final class BestiaryRendererCompatibility {
-    private static final String TAG = "BestiaryRendererCompat";
-
-    private BestiaryRendererCompatibility() {}
-
-    public static boolean isMaliG57MobileGlues() {
-        if (!"opengles_mobileglues".equals(Tools.LOCAL_RENDERER)) return false;
-        try {
-            GLInfoUtils.GLInfo info = GLInfoUtils.getGlInfo();
-            String renderer = info == null || info.renderer == null ? "" : info.renderer;
-            return renderer.toLowerCase(Locale.ROOT).contains("mali-g57");
-        } catch (Throwable t) {
-            Log.w(TAG, "GPU compatibility detection failed", t);
-            return false;
-        }
-    }
+    private BestiaryResourcePackSafety() {}
 
     public static void applyMinecraftOptions() {
-        if (!isMaliG57MobileGlues()) return;
-
-        String oldMipmaps = MCOptionUtils.get("mipmapLevels");
-        boolean changed = false;
-        try {
-            if (oldMipmaps == null || Integer.parseInt(oldMipmaps) > 0) {
-                MCOptionUtils.set("mipmapLevels", "0");
-                changed = true;
-            }
-        } catch (NumberFormatException ignored) {
-            MCOptionUtils.set("mipmapLevels", "0");
-            changed = true;
+        if (!BestiaryPerformanceProfile.resourcePackSafeModeEnabled()) {
+            Log.i(TAG, "Resource-pack safe mode disabled by user");
+            return;
         }
 
-        if (changed) MCOptionUtils.save();
-        Log.w(TAG, "Mali-G57 + MobileGlues resource-pack safe mode active; mipmaps="
-                + (changed ? "0 (was " + oldMipmaps + ")" : String.valueOf(oldMipmaps)));
+        String oldMipmaps = MCOptionUtils.get("mipmapLevels");
+        boolean changed = !"0".equals(oldMipmaps);
+        if (changed) {
+            MCOptionUtils.set("mipmapLevels", "0");
+            MCOptionUtils.save();
+        }
+        Log.w(TAG, "Resource-pack safe mode active; renderer=" + Tools.LOCAL_RENDERER
+                + " mipmaps=" + (changed ? "0 (was " + oldMipmaps + ")" : "0"));
     }
 }
 '''
-(JAVA / 'BestiaryRendererCompatibility.java').write_text(compat_java, encoding='utf-8')
+(JAVA / 'BestiaryResourcePackSafety.java').write_text(safety_java, encoding='utf-8')
 
 
-# MainActivity already loaded options.txt in onCreate. initLayout then resolves
-# the actual renderer. Apply the targeted option policy after renderer selection
-# and before Minecraft starts. This marker exists in the pinned Amethyst source
-# and is intentionally independent of Bestiary's evolving launch-info formatting.
 main = JAVA / 'MainActivity.java'
 m = main.read_text(encoding='utf-8')
-compat_hook = '            BestiaryRendererCompatibility.applyMinecraftOptions();\n'
-if compat_hook not in m:
-    needle = '            setTitle("Minecraft " + minecraftProfile.lastVersionId);\n'
-    req(needle in m, 'MainActivity renderer-resolved marker missing')
-    m = m.replace(needle, compat_hook + '\n' + needle, 1)
+options_hook = '        BestiaryGamePerformanceDefaults.installIfFresh(installBestiaryDefaults);\n'
+req(options_hook in m, 'MainActivity Bestiary options hook missing')
+if 'BestiaryResourcePackSafety.applyMinecraftOptions();' not in m:
+    m = m.replace(options_hook, options_hook + '        BestiaryResourcePackSafety.applyMinecraftOptions();\n', 1)
+
+launcher_info = '        Tools.printLauncherInfo(mVersion, LauncherPreferences.PREF_CUSTOM_JAVA_ARGS, Tools.getTotalDeviceMemory(this));\n'
+req(launcher_info in m, 'launcher info marker missing')
+if 'Bestiary resource-pack safety:' not in m:
+    m = m.replace(launcher_info, launcher_info + '''        Logger.appendToLog("Bestiary resource-pack safety: enabled="
+                + BestiaryPerformanceProfile.resourcePackSafeModeEnabled()
+                + " totalRam=" + Tools.getTotalDeviceMemory(this) + "MB configuredHeap="
+                + LauncherPreferences.PREF_RAM_ALLOCATION + "MB safeHeapCeiling="
+                + BestiaryPerformanceProfile.safeMaxHeapMb(Tools.getTotalDeviceMemory(this)) + "MB"
+                + " mipmaps=" + MCOptionUtils.get("mipmapLevels"));
+''', 1)
 main.write_text(m, encoding='utf-8')
+
+
+# Make the safety policy visible and reversible instead of silently hardcoding it.
+pref_renderer = RES / 'xml/pref_renderer.xml'
+x = pref_renderer.read_text(encoding='utf-8')
+if 'android:key="bestiary_resourcepack_safe_mode"' not in x:
+    marker = '    <net.kdt.pojavlaunch.prefs.BackButtonPreference/>\n\n'
+    req(marker in x, 'renderer preference back button marker missing')
+    category = '''    <PreferenceCategory android:title="Bestiary">
+        <SwitchPreference
+            android:title="Chế độ an toàn resource pack"
+            android:summary="Khuyên dùng cho Cobblemon/server pack nặng. Buộc Minecraft mipmap = 0 để giảm mạnh native/GPU texture memory khi reload."
+            android:key="bestiary_resourcepack_safe_mode"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+'''
+    x = x.replace(marker, marker + category, 1)
+pref_renderer.write_text(x, encoding='utf-8')
 
 
 # Contract checks.
 profile_text = profile.read_text(encoding='utf-8')
-req('REVISION = 7' in profile_text, 'performance revision 7 missing')
+req('REVISION = 8' in profile_text, 'performance revision 8 missing')
+req('RESOURCE_PACK_SAFE_KEY' in profile_text, 'resource-pack safety preference missing')
 req('safeMaxHeapMb' in profile_text, 'safe heap ceiling missing')
+req('return 1792;' in profile_text, '4GB-class native headroom ceiling missing')
 req('clampHeapForLaunch' in profile_text, 'runtime heap clamp helper missing')
-req('Unsafe Android heap allocation' in profile_text, 'persisted heap clamp logging missing')
+req('resourcePackSafeModeEnabled' in profile_text, 'resource-pack safe-mode helper missing')
+req('MCOptionUtils.set("mipmapLevels", "0")' in game_defaults.read_text(encoding='utf-8'), 'first-run mipmap zero missing')
+
 jre_text = jre.read_text(encoding='utf-8')
 req('bestiaryRequestedHeapMb' in jre_text, 'runtime requested heap tracking missing')
 req('clampHeapForLaunch(activity' in jre_text, 'runtime hard heap clamp missing')
+req('bestiary-hs_err_pid%p.log' in jre_text, 'HotSpot fatal-error file missing')
+
 tools_text = tools.read_text(encoding='utf-8')
 req('versionPolicy=0.6.13-native' in tools_text, 'Sodium 0.6.13 policy missing')
 req('while (lines.remove(legacyIntrinsic))' in tools_text, 'obsolete Sodium intrinsic cleanup missing')
 req('while (lines.remove(legacyChunk))' in tools_text, 'obsolete Sodium chunk cleanup missing')
 req('fullChunkRendering=' not in tools_text, 'obsolete Bestiary Sodium chunk policy remains')
-compat_text = (JAVA / 'BestiaryRendererCompatibility.java').read_text(encoding='utf-8')
-req('mali-g57' in compat_text, 'Mali-G57 detection missing')
-req('MCOptionUtils.set("mipmapLevels", "0")' in compat_text, 'Mali-G57 mipmap safety policy missing')
+
+safety_text = (JAVA / 'BestiaryResourcePackSafety.java').read_text(encoding='utf-8')
+req('Resource-pack safe mode active' in safety_text, 'general resource-pack safety class missing')
+req('MCOptionUtils.set("mipmapLevels", "0")' in safety_text, 'runtime mipmap zero policy missing')
 main_text = main.read_text(encoding='utf-8')
-req('BestiaryRendererCompatibility.applyMinecraftOptions()' in main_text, 'renderer compatibility hook missing')
-print('Bestiary Android 1.0.6 resource-pack renderer/memory stability hotfix applied')
+req('BestiaryResourcePackSafety.applyMinecraftOptions()' in main_text, 'resource-pack safety hook missing')
+req('Bestiary resource-pack safety:' in main_text, 'resource-pack safety telemetry missing')
+req('android:key="bestiary_resourcepack_safe_mode"' in pref_renderer.read_text(encoding='utf-8'), 'resource-pack safety UI missing')
+
+print('Bestiary Android 1.0.6 general resource-pack stability hardening applied')
