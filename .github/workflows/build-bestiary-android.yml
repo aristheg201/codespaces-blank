@@ -1,4 +1,4 @@
-name: Build Bestiary Android 1.0.6 Resource-Pack Safe v3
+name: Build Bestiary Android 1.0.6 Resource-Pack Safe v4
 
 on:
   push:
@@ -135,27 +135,35 @@ jobs:
 
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
           grep -q 'versionName "1.0.6"' "$APP/build.gradle"
-          grep -q 'REVISION = 9' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'REVISION = 10' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'RESOURCE_PACK_SAFE_KEY' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'RESTORE_MIPMAP_QUALITY_KEY' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'resourcePackSafeModeEnabled' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'safeMaxHeapMb' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'return 2304;' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'safeBackgroundThreads' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'clampHeapForLaunch' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'mipmapQualityRestorePending' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'bestiaryRequestedHeapMb' "$JAVA/utils/JREUtils.java"
           grep -q 'clampHeapForLaunch(activity' "$JAVA/utils/JREUtils.java"
           grep -q -- '-Dmax.bg.threads=' "$JAVA/utils/JREUtils.java"
           grep -q 'hasBackgroundThreadOverride' "$JAVA/utils/JREUtils.java"
+          grep -q 'visualQuality=preserved' "$JAVA/utils/JREUtils.java"
           grep -q 'bestiary-hs_err_pid%p.log' "$JAVA/utils/JREUtils.java"
           grep -q 'versionPolicy=0.6.13-native' "$JAVA/Tools.java"
           grep -q 'while (lines.remove(legacyIntrinsic))' "$JAVA/Tools.java"
           grep -q 'while (lines.remove(legacyChunk))' "$JAVA/Tools.java"
           ! grep -q 'fullChunkRendering=' "$JAVA/Tools.java"
-          grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryGamePerformanceDefaults.java"
-          grep -q 'Resource-pack safe mode active' "$JAVA/BestiaryResourcePackSafety.java"
-          grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryResourcePackSafety.java"
-          grep -q 'BestiaryResourcePackSafety.applyMinecraftOptions()' "$JAVA/MainActivity.java"
-          grep -q 'bestiary_resourcepack_safe_mode' "$APP/src/main/res/xml/pref_renderer.xml"
+
+          # Quality-preserving contract: keep mipmap level 2 and never force 0.
+          grep -q 'MCOptionUtils.set("mipmapLevels", "2")' "$JAVA/BestiaryGamePerformanceDefaults.java"
+          ! grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryGamePerformanceDefaults.java"
+          grep -q 'restoreVisualQualityIfNeeded' "$JAVA/BestiaryResourcePackSafety.java"
+          grep -q 'MCOptionUtils.set("mipmapLevels", "2")' "$JAVA/BestiaryResourcePackSafety.java"
+          ! grep -q 'MCOptionUtils.set("mipmapLevels", "0")' "$JAVA/BestiaryResourcePackSafety.java"
+          grep -q 'BestiaryResourcePackSafety.restoreVisualQualityIfNeeded()' "$JAVA/MainActivity.java"
+          grep -q 'không giảm texture, model, animation hay mipmap' "$APP/src/main/res/xml/pref_renderer.xml"
+
           grep -q 'BestiaryPerformanceProfile.targetRefreshRate()' "$JAVA/MinecraftGLSurface.java"
           ! grep -q 'float maxHz = 120f' "$JAVA/MinecraftGLSurface.java"
           grep -q 'Continuous native logcat mirror disabled' "$JAVA/utils/JREUtils.java"
@@ -187,21 +195,21 @@ jobs:
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           test -s "$APK"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4.apk
           cp mobileglues-provenance.txt build-output/
-          sha256sum build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk > build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-SHA256.txt
+          sha256sum build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4.apk > build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4-SHA256.txt
 
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
-          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
-          grep -q "versionName='1.0.6'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4-badging.txt
+          grep -q "versionName='1.0.6'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4-badging.txt
 
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-signing.txt
+          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4-signing.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3
+          name: BestiaryLauncher-Android-1.0.6-resourcepack-safe-v4
           path: build-output/*
           retention-days: 14
           if-no-files-found: error
