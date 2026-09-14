@@ -1,4 +1,4 @@
-name: Build Bestiary Android 1.0.6 Resource-Pack Safe
+name: Build Bestiary Android 1.0.6 Resource-Pack Safe v3
 
 on:
   push:
@@ -135,14 +135,17 @@ jobs:
 
           grep -q 'applicationId "vn.svframe.bestiary.launcher"' "$APP/build.gradle"
           grep -q 'versionName "1.0.6"' "$APP/build.gradle"
-          grep -q 'REVISION = 8' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'REVISION = 9' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'RESOURCE_PACK_SAFE_KEY' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'resourcePackSafeModeEnabled' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'safeMaxHeapMb' "$JAVA/BestiaryPerformanceProfile.java"
-          grep -q 'return 1792;' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'return 2304;' "$JAVA/BestiaryPerformanceProfile.java"
+          grep -q 'safeBackgroundThreads' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'clampHeapForLaunch' "$JAVA/BestiaryPerformanceProfile.java"
           grep -q 'bestiaryRequestedHeapMb' "$JAVA/utils/JREUtils.java"
           grep -q 'clampHeapForLaunch(activity' "$JAVA/utils/JREUtils.java"
+          grep -q -- '-Dmax.bg.threads=' "$JAVA/utils/JREUtils.java"
+          grep -q 'hasBackgroundThreadOverride' "$JAVA/utils/JREUtils.java"
           grep -q 'bestiary-hs_err_pid%p.log' "$JAVA/utils/JREUtils.java"
           grep -q 'versionPolicy=0.6.13-native' "$JAVA/Tools.java"
           grep -q 'while (lines.remove(legacyIntrinsic))' "$JAVA/Tools.java"
@@ -184,21 +187,21 @@ jobs:
           mkdir -p build-output
           APK="$(find amethyst/app_pojavlauncher/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           test -s "$APK"
-          cp "$APK" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2.apk
+          cp "$APK" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk
           cp mobileglues-provenance.txt build-output/
-          sha256sum build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2.apk > build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2-SHA256.txt
+          sha256sum build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk > build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-SHA256.txt
 
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2-badging.txt
-          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2-badging.txt
-          grep -q "versionName='1.0.6'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2-badging.txt
+          "$AAPT" dump badging build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
+          grep -q "package: name='vn.svframe.bestiary.launcher.debug'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
+          grep -q "versionName='1.0.6'" build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-badging.txt
 
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2-signing.txt
+          "$APKSIGNER" verify --verbose --print-certs build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3.apk | tee build-output/BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3-signing.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryLauncher-Android-1.0.6-resourcepack-safe-v2
+          name: BestiaryLauncher-Android-1.0.6-resourcepack-safe-v3
           path: build-output/*
           retention-days: 14
           if-no-files-found: error
