@@ -11,10 +11,15 @@ def req(ok, message):
 
 
 # Bestiary Android 1.0.6 resource-pack stability hardening.
+# Revision 9 is based on an actual Android failure trace: the game survives
+# startup and joins the server, then disappears mid server-pack ResourceManager
+# reload without Java OOM/crash output. That pattern is consistent with native/
+# GPU pressure or external process kill, so this revision reserves more native
+# headroom and reduces concurrent background reload work.
 profile = JAVA / 'BestiaryPerformanceProfile.java'
 s = profile.read_text(encoding='utf-8')
 req('private static final int REVISION = 6;' in s, 'performance revision 6 marker missing')
-s = s.replace('private static final int REVISION = 6;', 'private static final int REVISION = 8;', 1)
+s = s.replace('private static final int REVISION = 6;', 'private static final int REVISION = 9;', 1)
 
 verbose_key = '    private static final String VERBOSE_NATIVE_LOG_KEY = "bestiary_verbose_native_log";\n'
 req(verbose_key in s, 'verbose native log key marker missing')
@@ -46,8 +51,8 @@ old = '''        if (!prefs.contains("allocation")) {
         }'''
 req(old in s, 'performance heap migration block missing')
 s = s.replace(old, '''        if (!prefs.contains("allocation")) {
-            edit.putInt("allocation", targetHeap);
-            currentHeap = targetHeap;
+            currentHeap = Math.min(targetHeap, safeHeapCeiling);
+            edit.putInt("allocation", currentHeap);
             heapChanged = true;
         } else if (currentHeap > safeHeapCeiling) {
             Log.w(TAG, "Unsafe Android heap allocation " + currentHeap + "MB clamped to "
@@ -56,8 +61,9 @@ s = s.replace(old, '''        if (!prefs.contains("allocation")) {
             currentHeap = safeHeapCeiling;
             heapChanged = true;
         } else if (legacyManagedValues && currentHeap != targetHeap) {
-            edit.putInt("allocation", targetHeap);
-            currentHeap = targetHeap;
+            int migratedHeap = Math.min(targetHeap, safeHeapCeiling);
+            edit.putInt("allocation", migratedHeap);
+            currentHeap = migratedHeap;
             heapChanged = true;
         }''', 1)
 
@@ -85,14 +91,19 @@ s = s.replace(old, '''    public static int initialHeapMb(int maxHeapMb) {
         return 512;
     }
 
-    /** Reserve native/GPU headroom for server resource-pack decoding/reload. */
+    /**
+     * Reserve native/GPU headroom for server resource-pack decoding/reload.
+     * NativeImage, atlas staging and GL driver allocations are outside -Xmx.
+     * 8 GB-class Android devices therefore intentionally cap near 2.25 GiB.
+     */
     public static int safeMaxHeapMb(int totalRamMb) {
         if (totalRamMb >= 12000) return 4096;
-        if (totalRamMb >= 7500) return 3072;
-        if (totalRamMb >= 5500) return 2560;
-        if (totalRamMb >= 3800) return 1792;
-        if (totalRamMb >= 2800) return 1280;
-        return 1024;
+        if (totalRamMb >= 9500) return 3072;
+        if (totalRamMb >= 7500) return 2304;
+        if (totalRamMb >= 5500) return 1792;
+        if (totalRamMb >= 3800) return 1536;
+        if (totalRamMb >= 2800) return 1024;
+        return 768;
     }
 
     public static int clampHeapForLaunch(Context context, int requestedMb) {
@@ -109,6 +120,10 @@ s = s.replace(old, '''    public static int initialHeapMb(int maxHeapMb) {
     public static boolean resourcePackSafeModeEnabled() {
         SharedPreferences prefs = LauncherPreferences.DEFAULT_PREF;
         return prefs == null || prefs.getBoolean(RESOURCE_PACK_SAFE_KEY, true);
+    }
+
+    public static int safeBackgroundThreads() {
+        return 2;
     }
 
     public static float targetRefreshRate() {''', 1)
@@ -133,6 +148,9 @@ game_defaults.write_text(g, encoding='utf-8')
 
 # Enforce the safe heap at the actual JVM launch boundary and retain a HotSpot
 # fatal-error file if a future failure is a native JVM crash rather than LMKD.
+# In resource-pack safe mode also bound Minecraft/ModernFix background workers to
+# two unless the user already supplied max.bg.threads explicitly. This reduces
+# concurrent model/image decode pressure during ResourceManager reload.
 jre = JAVA / 'utils/JREUtils.java'
 j = jre.read_text(encoding='utf-8')
 old = '''        int bestiaryMaxHeapMb = LauncherPreferences.PREF_RAM_ALLOCATION;
@@ -147,6 +165,17 @@ j = j.replace(old, '''        int bestiaryRequestedHeapMb = LauncherPreferences.
         int bestiaryInitialHeapMb = BestiaryPerformanceProfile.initialHeapMb(bestiaryMaxHeapMb);
         userArgs.add("-Xms" + bestiaryInitialHeapMb + "M");
         userArgs.add("-Xmx" + bestiaryMaxHeapMb + "M");
+
+        boolean hasBackgroundThreadOverride = false;
+        for (String arg : userArgs) {
+            if (arg != null && arg.startsWith("-Dmax.bg.threads=")) {
+                hasBackgroundThreadOverride = true;
+                break;
+            }
+        }
+        if (BestiaryPerformanceProfile.resourcePackSafeModeEnabled() && !hasBackgroundThreadOverride) {
+            userArgs.add("-Dmax.bg.threads=" + BestiaryPerformanceProfile.safeBackgroundThreads());
+        }
 
         File bestiaryCrashDir = new File(gameDirectory, "logs");
         if (!bestiaryCrashDir.isDirectory()) bestiaryCrashDir.mkdirs();
@@ -163,6 +192,9 @@ j = j.replace(old, '''        int bestiaryRequestedHeapMb = LauncherPreferences.
         Logger.appendToLog("Bestiary memory policy: requested=" + bestiaryRequestedHeapMb
                 + "M Xms=" + bestiaryInitialHeapMb + "M Xmx=" + bestiaryMaxHeapMb
                 + "M safeMode=" + BestiaryPerformanceProfile.resourcePackSafeModeEnabled()
+                + " bgThreads=" + (hasBackgroundThreadOverride ? "custom" :
+                    (BestiaryPerformanceProfile.resourcePackSafeModeEnabled()
+                        ? BestiaryPerformanceProfile.safeBackgroundThreads() : "default"))
                 + " hotspotErrorFile=" + (hasHotspotErrorFile ? "custom" : bestiaryErrorFile));''', 1)
 jre.write_text(j, encoding='utf-8')
 
@@ -255,7 +287,7 @@ if 'android:key="bestiary_resourcepack_safe_mode"' not in x:
     x = x.replace(marker, marker + '''    <PreferenceCategory android:title="Bestiary">
         <SwitchPreference
             android:title="Chế độ an toàn resource pack"
-            android:summary="Khuyên dùng cho Cobblemon/server pack nặng. Buộc Minecraft mipmap = 0 để giảm native/GPU texture memory khi reload."
+            android:summary="Khuyên dùng cho Cobblemon/server pack nặng. Giảm mipmap, chừa native/GPU RAM và giảm worker reload để tránh app bị Android kill."
             android:key="bestiary_resourcepack_safe_mode"
             android:defaultValue="true" />
     </PreferenceCategory>
@@ -266,9 +298,10 @@ pref_renderer.write_text(x, encoding='utf-8')
 
 # Contract checks.
 profile_text = profile.read_text(encoding='utf-8')
-req('REVISION = 8' in profile_text, 'performance revision 8 missing')
+req('REVISION = 9' in profile_text, 'performance revision 9 missing')
 req('RESOURCE_PACK_SAFE_KEY' in profile_text, 'resource-pack safety preference missing')
-req('safeMaxHeapMb' in profile_text and 'return 1792;' in profile_text, 'native headroom ceiling missing')
+req('safeMaxHeapMb' in profile_text and 'return 2304;' in profile_text, '8GB native headroom ceiling missing')
+req('safeBackgroundThreads' in profile_text and 'return 2;' in profile_text, 'safe reload worker policy missing')
 req('clampHeapForLaunch' in profile_text, 'runtime heap clamp helper missing')
 req('resourcePackSafeModeEnabled' in profile_text, 'resource-pack safe-mode helper missing')
 req('MCOptionUtils.set("mipmapLevels", "0")' in game_defaults.read_text(encoding='utf-8'), 'first-run mipmap zero missing')
@@ -276,6 +309,8 @@ req('MCOptionUtils.set("mipmapLevels", "0")' in game_defaults.read_text(encoding
 jre_text = jre.read_text(encoding='utf-8')
 req('bestiaryRequestedHeapMb' in jre_text, 'runtime requested heap tracking missing')
 req('clampHeapForLaunch(activity' in jre_text, 'runtime hard heap clamp missing')
+req('-Dmax.bg.threads=' in jre_text, 'safe background worker override missing')
+req('hasBackgroundThreadOverride' in jre_text, 'user max.bg.threads preservation missing')
 req('bestiary-hs_err_pid%p.log' in jre_text, 'HotSpot fatal-error file missing')
 
 tools_text = tools.read_text(encoding='utf-8')
@@ -290,4 +325,4 @@ req('MCOptionUtils.set("mipmapLevels", "0")' in safety_text, 'runtime mipmap zer
 req('BestiaryResourcePackSafety.applyMinecraftOptions()' in main.read_text(encoding='utf-8'), 'resource-pack safety hook missing')
 req('android:key="bestiary_resourcepack_safe_mode"' in pref_renderer.read_text(encoding='utf-8'), 'resource-pack safety UI missing')
 
-print('Bestiary Android 1.0.6 general resource-pack stability hardening applied')
+print('Bestiary Android 1.0.6 resource-pack native-headroom v3 hardening applied')
