@@ -295,6 +295,30 @@ if 'BestiaryResourcePackSafety.restoreVisualQualityIfNeeded();' not in m:
 main.write_text(m, encoding='utf-8')
 
 
+# Bestiary 1.0.6 is newer than the currently published Android updater product
+# (1.0.4). Keep self-update dormant until a newer Android APK is intentionally
+# published. Bootstrap/modpack sync remains enabled and unchanged.
+launcher = JAVA / 'LauncherActivity.java'
+ls = launcher.read_text(encoding='utf-8')
+update_hook = '        BestiaryAppUpdater.check(this);\n'
+req(update_hook in ls, 'Android self-updater hook missing before 1.0.6 guard')
+ls = ls.replace(update_hook, '', 1)
+launcher.write_text(ls, encoding='utf-8')
+
+# Never expose transport URLs or raw exception messages to players if the
+# updater is re-enabled in a later release. Full technical detail stays in logcat.
+updater = JAVA / 'BestiaryAppUpdater.java'
+u = updater.read_text(encoding='utf-8')
+unsafe_toast = '                Tools.runOnUiThread(() -> android.widget.Toast.makeText(activity, "Cập nhật lỗi: " + t.getMessage(), android.widget.Toast.LENGTH_LONG).show());\n'
+req(unsafe_toast in u, 'unsafe Android updater error toast marker missing')
+u = u.replace(
+    unsafe_toast,
+    '                Tools.runOnUiThread(() -> android.widget.Toast.makeText(activity, "Cập nhật thất bại. Vui lòng thử lại sau.", android.widget.Toast.LENGTH_LONG).show());\n',
+    1,
+)
+updater.write_text(u, encoding='utf-8')
+
+
 # Visible and reversible safety switch. Safety affects memory/concurrency only.
 pref_renderer = RES / 'xml/pref_renderer.xml'
 x = pref_renderer.read_text(encoding='utf-8')
@@ -349,4 +373,10 @@ req('MCOptionUtils.set("mipmapLevels", "0")' not in safety_text, 'quality regres
 req('BestiaryResourcePackSafety.restoreVisualQualityIfNeeded()' in main.read_text(encoding='utf-8'), 'quality restore hook missing')
 req('không giảm texture, model, animation hay mipmap' in pref_renderer.read_text(encoding='utf-8'), 'quality-preserving UI text missing')
 
-print('Bestiary Android 1.0.6 resource-pack quality-preserving native-headroom v4 applied')
+launcher_text = launcher.read_text(encoding='utf-8')
+updater_text = updater.read_text(encoding='utf-8')
+req('BestiaryAppUpdater.check(this);' not in launcher_text, 'Android self-updater unexpectedly active in 1.0.6')
+req('"Cập nhật lỗi: " + t.getMessage()' not in updater_text, 'raw updater exception still exposed to UI')
+req('Cập nhật thất bại. Vui lòng thử lại sau.' in updater_text, 'sanitized updater error message missing')
+
+print('Bestiary Android 1.0.6 resource-pack v4 + dormant self-updater guard applied')
