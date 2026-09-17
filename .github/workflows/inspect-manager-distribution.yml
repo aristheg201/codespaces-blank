@@ -1,0 +1,77 @@
+name: Inspect Manager distribution publisher
+
+on:
+  push:
+    branches: [bestiary-manager-v6-3-2-options-source]
+    paths: [.github/workflows/inspect-manager-distribution.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct patched Manager source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts=Get-ChildItem bpm6-src/part-*.txt|Sort-Object Name
+          if($parts.Count -ne 9){throw "Expected 9 chunks, found $($parts.Count)"}
+          $b64=($parts|ForEach-Object{Get-Content $_.FullName -Raw})-join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz',[Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+          node patch-v603.cjs
+          node patch-v604.cjs
+          Copy-Item manager-v606/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v606/App.tsx manager/src/renderer/src/App.tsx -Force
+          Copy-Item manager-v606/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v610/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v610/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v610/AppUpdater.ts manager/src/main/services/AppUpdater.ts -Force
+          node patch-v605.cjs
+          node patch-v606.cjs
+          node manager-v606/patch-main.cjs
+          node manager-v610/patch-main.cjs
+          node manager-v610/patch-ui.cjs
+          node manager-v620/patch-v620.cjs
+          Copy-Item manager-v630/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v630/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v630/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v630/ModAuditService.ts manager/src/main/services/ModAuditService.ts -Force
+          Copy-Item manager-v630/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
+          Copy-Item manager-v630/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v630/App.tsx manager/src/renderer/src/App.tsx -Force
+          node manager-v630/patch-workspace-fixes.cjs
+          node manager-v630/patch-main.cjs
+          node manager-v630/patch-distribution.cjs
+          node manager-v630/patch-ui-fixes.cjs
+          node manager-v630/patch-keybind.cjs
+          Copy-Item manager-v632/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
+          node manager-v632/patch-v632.cjs
+      - name: Print release asset upload logic
+        shell: pwsh
+        run: |
+          $p='manager/src/main/services/GithubDistributionService.ts'
+          $lines=Get-Content $p
+          $matches=Select-String -Path $p -Pattern 'upload|assetName|releases/assets|uploads.github|bestiary-objects|Upload thất bại|asset' -CaseSensitive:$false
+          foreach($m in $matches){
+            $start=[Math]::Max(1,$m.LineNumber-10)
+            $end=[Math]::Min($lines.Count,$m.LineNumber+18)
+            Write-Host "===== lines $start-$end ====="
+            for($i=$start;$i -le $end;$i++){ Write-Host (("{0,4}: " -f $i)+$lines[$i-1]) }
+          }
