@@ -1,0 +1,13 @@
+{
+  "version": "6.3.3",
+  "sha256": "080c08dc8b3419a9566c7a24dbcb23e9cf52d7c92b0a4ddefdf7794ea12c1443",
+  "sourceCommit": "ccdda1fc8dd0122e7c79a22f6180793cf057df21",
+  "branch": "bestiary-manager-v6-3-3-upload-recovery",
+  "runId": 35253798201,
+  "releaseTag": "manager-v6.3.3",
+  "starterAssetRecovery": true,
+  "uploadedOnlyReuse": true,
+  "transientRetry": true,
+  "assetVerification": true,
+  "verified": true
+}
