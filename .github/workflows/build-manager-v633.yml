@@ -1,0 +1,202 @@
+name: Build Bestiary Pack Manager 6.3.3 Upload Recovery
+
+on:
+  push:
+    branches: [bestiary-manager-v6-3-3-upload-recovery]
+    paths-ignore:
+      - manager-v633/ci-build.json
+      - manager-v633/ci-failure.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 80
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Reconstruct Manager source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts=Get-ChildItem bpm6-src/part-*.txt|Sort-Object Name
+          if($parts.Count -ne 9){throw "Expected 9 chunks, found $($parts.Count)"}
+          $b64=($parts|ForEach-Object{Get-Content $_.FullName -Raw})-join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz',[Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+          node patch-v603.cjs
+          node patch-v604.cjs
+          Copy-Item manager-v606/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v606/App.tsx manager/src/renderer/src/App.tsx -Force
+          Copy-Item manager-v606/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v610/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v610/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v610/AppUpdater.ts manager/src/main/services/AppUpdater.ts -Force
+          node patch-v605.cjs
+          node patch-v606.cjs
+          node manager-v606/patch-main.cjs
+          node manager-v610/patch-main.cjs
+          node manager-v610/patch-ui.cjs
+          node manager-v620/patch-v620.cjs
+          Copy-Item manager-v630/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v630/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v630/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v630/ModAuditService.ts manager/src/main/services/ModAuditService.ts -Force
+          Copy-Item manager-v630/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
+          Copy-Item manager-v630/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v630/App.tsx manager/src/renderer/src/App.tsx -Force
+          node manager-v630/patch-workspace-fixes.cjs
+          node manager-v630/patch-main.cjs
+          node manager-v630/patch-distribution.cjs
+          node manager-v630/patch-ui-fixes.cjs
+          node manager-v630/patch-keybind.cjs
+          Copy-Item manager-v632/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
+          node manager-v632/patch-v632.cjs
+          node manager-v633/patch-v633.cjs
+          $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
+          $pkg.version='6.3.3'
+          $pkg.author='SVFrame Team Studio'
+          $pkg|ConvertTo-Json -Depth 20|Set-Content manager/package.json -Encoding UTF8
+          New-Item -ItemType Directory -Force manager/src/renderer/public|Out-Null
+          Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
+          New-Item -ItemType Directory -Force manager/resources/gh|Out-Null
+          Copy-Item (Get-Command gh).Source manager/resources/gh/gh.exe -Force
+          New-Item -ItemType Directory -Force manager/build|Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $source=[System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
+          try{
+            $bitmap=New-Object System.Drawing.Bitmap 512,512
+            try{
+              $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+              try{
+                $graphics.Clear([System.Drawing.Color]::Transparent)
+                $graphics.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $scale=[Math]::Min(440.0/$source.Width,440.0/$source.Height)
+                $w=[int]($source.Width*$scale);$h=[int]($source.Height*$scale)
+                $graphics.DrawImage($source,[int]((512-$w)/2),[int]((512-$h)/2),$w,$h)
+              }finally{$graphics.Dispose()}
+              $bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'),[System.Drawing.Imaging.ImageFormat]::Png)
+            }finally{$bitmap.Dispose()}
+          }finally{$source.Dispose()}
+
+      - name: Verify upload recovery contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $service=Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          if($service -notmatch "asset\.state === 'starter'"){throw 'starter cleanup contract missing'}
+          if($service -notmatch "asset\.state === 'uploaded'"){throw 'uploaded-only reuse contract missing'}
+          if($service -notmatch 'uploadObjectWithRecovery'){throw 'upload recovery helper missing'}
+          if($service -notmatch "'DELETE'"){throw 'stuck asset delete contract missing'}
+          if($service -notmatch 'attempt <= 3'){throw 'three-attempt retry contract missing'}
+          if($service -notmatch 'sha256:'){throw 'digest verification contract missing'}
+          if($service -notmatch '--paginate' -or $service -notmatch '--slurp'){throw 'paginated asset inventory missing'}
+          if($service -match 'interface AssetsResponse'){throw 'legacy name-only asset model still present'}
+          $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
+          if($pkg.version -ne '6.3.3'){throw "Expected Manager 6.3.3, got $($pkg.version)"}
+
+      - name: Install dependencies
+        working-directory: manager
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: manager
+        run: npm run typecheck
+
+      - name: Build NSIS
+        working-directory: manager
+        run: npm run dist:win
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.3.exe -ErrorAction Stop
+          if($installer.Length -lt 1000000){throw 'Installer too small.'}
+          $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt -Encoding ascii
+          Write-Host "MANAGER_633_SHA256=$hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryPackManager-Windows-6.3.3
+          path: |
+            manager/release/BestiaryPackManager-Setup-6.3.3.exe
+            manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Publish Manager 6.3.3 release
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $tag='manager-v6.3.3'
+          $exe='manager/release/BestiaryPackManager-Setup-6.3.3.exe'
+          $sha='manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if($LASTEXITCODE -ne 0){
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.3' --notes 'Publisher recovery: chỉ reuse release asset đã uploaded, tự dọn asset state=starter do upload đứt, retry transient GitHub upload failures và xác minh size/digest trước khi ghi manifest.'
+          }
+          gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
+
+      - name: Record verified build
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt -Raw
+          $hash=($line -split '\s+')[0]
+          $m=[ordered]@{
+            version='6.3.3'
+            sha256=$hash
+            sourceCommit=$env:GITHUB_SHA
+            branch=$env:GITHUB_REF_NAME
+            runId=[long]$env:GITHUB_RUN_ID
+            releaseTag='manager-v6.3.3'
+            starterAssetRecovery=$true
+            uploadedOnlyReuse=$true
+            transientRetry=$true
+            assetVerification=$true
+            verified=$true
+          }|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+          $path='manager-v633/ci-build.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record verified Manager 6.3.3 upload recovery build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
+
+      - name: Record failed build
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $m=[ordered]@{version='6.3.3';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;verified=$false;status='failed'}|ConvertTo-Json
+          $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+          $path='manager-v633/ci-failure.json';$old=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
+          $payload=@{message='Record failed Manager 6.3.3 CI [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
