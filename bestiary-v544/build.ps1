@@ -31,8 +31,9 @@ $account = Get-Content 'source/src/main/core/AccountService.ts' -Raw
 $remote = Get-Content 'source/src/main/core/RemoteService.ts' -Raw
 
 if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM revision marker missing.' }
-if ($generator -notmatch "hardMaxMb: 2304") { throw '4 GB heap target missing.' }
-if ($generator -notmatch "fraction: 0\.60, reserveMb: 1280") { throw '4 GB memory reserve policy missing.' }
+if ($generator -notmatch "MIN_CLIENT_HEAP_MB = 3072") { throw '3 GB minimum client heap contract missing.' }
+if ($generator -notmatch "hardMaxMb: 3072") { throw '4 GB heap target missing.' }
+if ($generator -notmatch "fraction: 0\.80, reserveMb: 768") { throw '4 GB memory policy missing.' }
 if ($generator -notmatch "\-XX:\+UseG1GC" -or $generator -notmatch "\-XX:\+ParallelRefProcEnabled") { throw 'Minimal G1 client defaults missing.' }
 if ($generator -notmatch "\-XX:\+UseStringDeduplication") { throw 'Low-memory string dedup missing.' }
 
@@ -60,7 +61,7 @@ foreach ($arg in $forbidden) {
 if ($main -notmatch "generatedJvmArgs\.includes\('-Dbestiary\.jvm\.profile=544'\)") { throw '5.4.4 automatic JVM migration missing.' }
 if ($main -match "generatedJvmArgs\.includes\('-Dbestiary\.jvm\.profile=539'\)") { throw 'Old 5.3.9 JVM revision is still authoritative.' }
 if ($main -notmatch 'minRamMb: adaptiveJvm\.recommendedMinRamMb' -or $main -notmatch 'maxRamMb: adaptiveJvm\.recommendedMaxRamMb') { throw 'Old JVM profiles are not atomically migrated to new RAM recommendations.' }
-if ($settingsUi -notmatch 'total \* 0\.60' -or $settingsUi -notmatch '2304') { throw 'Settings RAM slider does not reflect new low-memory budget.' }
+if ($settingsUi -notmatch 'total \* 0\.80' -or $settingsUi -notmatch '3072' -or $settingsUi -notmatch 'min=\{3072\}') { throw 'Settings RAM slider does not enforce the 3 GB floor.' }
 if ($appSource -notmatch "currentVersion: '5\.4\.4'") { throw '5.4.4 renderer version metadata missing.' }
 if ($account -notmatch 'BestiaryLauncher/5\.4\.4' -or $remote -notmatch 'BestiaryLauncher/5\.4\.4') { throw '5.4.4 user-agent metadata missing.' }
 
@@ -82,15 +83,15 @@ const remote = {
   ],
 };
 const base = {
-  username: 'BestiaryTest', minRamMb: 512, maxRamMb: 4096,
+  username: 'BestiaryTest', minRamMb: 768, maxRamMb: 4096,
   width: 1280, height: 720, fullscreen: false,
   performancePreset: 'performance', clientProfile: 'lite',
   customJvmArgs: '', generatedJvmArgs: [],
 };
 const cases = [
-  [3840, 4, 'lite', 512, 2304, 'low_memory'],
-  [4096, 4, 'lite', 512, 2304, 'low_memory'],
-  [4096, 4, 'full', 512, 2304, 'low_memory'],
+  [3840, 4, 'lite', 768, 3072, 'low_memory'],
+  [4096, 4, 'lite', 768, 3072, 'low_memory'],
+  [4096, 4, 'full', 768, 3072, 'low_memory'],
   [6144, 4, 'lite', 768, 3072, 'entry'],
   [8192, 8, 'lite', 1024, 4096, 'standard'],
   [12288, 12, 'full', 1536, 6144, 'performance'],
@@ -131,7 +132,7 @@ const forbidden = [
 for (const prefix of forbidden) {
   if (low.args.some((arg) => arg === prefix || arg.startsWith(prefix))) throw new Error(`4 GB profile still contains ${prefix}`);
 }
-if (!low.belowProfileMinimum) throw new Error('4 GB Lite profile must still report below published profile minimum.');
+if (low.belowProfileMinimum) throw new Error('4 GB Lite profile must meet the 3 GB published profile minimum.');
 
 const custom = generateJvmProfileForHardware(
   { ...base, performancePreset: 'custom', customJvmArgs: '-XX:MaxGCPauseMillis=175 -XX:G1ReservePercent=25 -Xmx99G' },
@@ -190,8 +191,9 @@ Copy-Item 'source/src/renderer/src/components/SettingsModal.tsx' 'build-output-v
 version=5.4.4
 sha256=$hash
 jvmProfileRevision=544
-lowMemory3840MaxMb=2304
-lowMemory4096MaxMb=2304
+minimumClientHeapMb=3072
+lowMemory3840MaxMb=3072
+lowMemory4096MaxMb=3072
 legacy539AutoMigrated=true
 aggressiveServerGcFlagsRemoved=true
 java21AdaptiveG1=true
