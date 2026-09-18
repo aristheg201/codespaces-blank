@@ -27,9 +27,10 @@ interface MemoryPolicy {
 }
 
 const MEMORY_POLICIES: Array<MemoryPolicy & { maxSystemRamMb: number }> = [
-  // 4 GB-class Windows clients need more Java heap for Cobblemon/resource reloads,
-  // but still leave enough address-space/physical memory for the OS, native libs and iGPU.
-  { maxSystemRamMb: 4608, tier: 'low_memory', fraction: 0.60, reserveMb: 1280, hardMaxMb: 2304 },
+  // Cobblemon + the merged resource pack requires at least a 3 GiB Java heap.
+  // On 4 GB-class systems this is intentionally aggressive and relies on the OS/pagefile
+  // for native/iGPU pressure rather than allowing Minecraft to fall back below 3 GiB.
+  { maxSystemRamMb: 4608, tier: 'low_memory', fraction: 0.80, reserveMb: 768, hardMaxMb: 3072 },
   { maxSystemRamMb: 6144, tier: 'entry', fraction: 0.58, reserveMb: 1792, hardMaxMb: 3072 },
   { maxSystemRamMb: 8192, tier: 'standard', fraction: 0.55, reserveMb: 2048, hardMaxMb: 4096 },
   { maxSystemRamMb: 12_288, tier: 'performance', fraction: 0.55, reserveMb: 3072, hardMaxMb: 6144 },
@@ -38,6 +39,7 @@ const MEMORY_POLICIES: Array<MemoryPolicy & { maxSystemRamMb: number }> = [
 ];
 
 const GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544';
+const MIN_CLIENT_HEAP_MB = 3072;
 
 function splitJvmArgs(input: string): string[] {
   const args: string[] = [];
@@ -105,7 +107,7 @@ function memoryPolicy(systemRamMb: number): MemoryPolicy {
 function safeHeapBudget(systemRamMb: number, policy: MemoryPolicy): number {
   const byFraction = roundDown256(systemRamMb * policy.fraction);
   const byReserve = roundDown256(systemRamMb - policy.reserveMb);
-  return Math.max(1024, Math.min(byFraction, byReserve, policy.hardMaxMb));
+  return Math.max(MIN_CLIENT_HEAP_MB, Math.min(byFraction, byReserve, policy.hardMaxMb));
 }
 
 function jvmArgumentKey(argument: string): string {
@@ -142,7 +144,7 @@ export function generateJvmProfileForHardware(
   const recommendation = profileRecommendation(profile, remote);
   const policy = memoryPolicy(systemRamMb);
   const safeBudgetMb = safeHeapBudget(systemRamMb, policy);
-  const recommendedMaxRamMb = Math.max(1024, roundDown256(Math.min(recommendation.recommended, safeBudgetMb)));
+  const recommendedMaxRamMb = Math.max(MIN_CLIENT_HEAP_MB, roundDown256(Math.min(recommendation.recommended, safeBudgetMb)));
   const recommendedMinRamMb = Math.max(512, Math.min(2048, roundDown256(recommendedMaxRamMb * 0.25)));
 
   // Java 21 already has a mature adaptive G1 policy. Keep client defaults intentionally
