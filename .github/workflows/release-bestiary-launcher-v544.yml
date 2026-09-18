@@ -154,3 +154,5 @@ jobs:
           else
             jq -nc --arg message 'Record verified Launcher 5.4.4 release [skip ci]' --arg content "$ENC" --arg branch "$SOURCE_BRANCH" '{message:$message,content:$content,branch:$branch}' | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$PATH_NAME" --input - >/dev/null
           fi
+
+# trigger: launcher-v5.4.4-memory-fix
