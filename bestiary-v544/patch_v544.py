@@ -89,7 +89,7 @@ settings_ui = settings_ui.replace(
     """  const maxSafeRamMb = useMemo(() => {
     const total = snapshot.systemRamMb;
     const budget = total <= 4608
-      ? Math.min(total * 0.60, total - 1280, 2304)
+      ? Math.min(total * 0.80, total - 768, 3072)
       : total <= 6144
         ? Math.min(total * 0.58, total - 1792, 3072)
         : total <= 8192
@@ -99,18 +99,23 @@ settings_ui = settings_ui.replace(
             : total <= 16_384
               ? Math.min(total * 0.55, total - 4096, 8192)
               : Math.min(total * 0.60, total - 6144, 10_240);
-    return Math.max(1024, Math.floor(budget / 256) * 256);
+    return Math.max(3072, Math.floor(budget / 256) * 256);
   }, [snapshot.systemRamMb]);""",
     1,
 )
 settings_ui = settings_ui.replace(
     'Generator dùng RAM vật lý, CPU và Full/Lite để tạo một profile RAM + G1GC đồng bộ. Máy ít RAM được ưu tiên chừa bộ nhớ cho Windows và native libraries.',
-    'Generator dùng RAM vật lý và Full/Lite để tạo heap Java 21 an toàn. Máy 4 GB được cấp thêm heap cho Cobblemon/resource reload, còn GC để Java 21 tự thích nghi thay vì ép Aikar/server flags.',
+    'Generator dùng RAM vật lý và Full/Lite để tạo heap Java 21 an toàn. Client luôn được cấp tối thiểu 3 GB heap cho Cobblemon/resource reload; GC để Java 21 tự thích nghi thay vì ép Aikar/server flags.',
 )
 settings_ui = settings_ui.replace(
     'Đọc RAM/CPU, tính heap an toàn và tạo G1GC profile Java 21. Máy 4-6 GB dùng low-memory policy riêng.',
-    'Đọc RAM, tính heap an toàn và tạo client JVM profile tối giản. Máy 4 GB ưu tiên tránh Java heap OOM khi tải Cobblemon/resource pack.',
+    'Đọc RAM, giữ tối thiểu 3 GB heap và tạo client JVM profile tối giản để tránh Java heap OOM khi tải Cobblemon/resource pack.',
 )
+settings_ui = settings_ui.replace(
+    '<input type="range" min={1024} max={Math.max(1024,maxSafeRamMb)} step={256} value={Math.max(1024,Math.min(settings.maxRamMb,maxSafeRamMb))}',
+    '<input type="range" min={3072} max={Math.max(3072,maxSafeRamMb)} step={256} value={Math.max(3072,Math.min(settings.maxRamMb,maxSafeRamMb))}',
+)
+req('min={3072}' in settings_ui, '3 GB RAM slider floor missing')
 settings_path.write_text(settings_ui, encoding='utf-8')
 
 # Version metadata.
