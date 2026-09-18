@@ -1,0 +1,65 @@
+name: Publish Bestiary Launcher 5.4.4 Verified Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v544.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified 5.4.4 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.4
+          path: publish
+          repository: aristheg201/codespaces-blank
+          run-id: 35351905665
+          github-token: ${{ github.token }}
+
+      - name: Verify exact built artifact
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.4.exe' -print -quit)"
+          HASHFILE="$(find publish -type f -name 'BestiaryLauncher-Setup-5.4.4-SHA256.txt' -print -quit)"
+          CONTRACT="$(find publish -type f -name 'memory-contract.txt' -print -quit)"
+          test -n "$EXE" && test -s "$EXE"
+          test -n "$HASHFILE" && test -s "$HASHFILE"
+          test -n "$CONTRACT" && test -s "$CONTRACT"
+          NORMALIZED="$(mktemp)"
+          tr -d '\r' < "$CONTRACT" > "$NORMALIZED"
+          grep -qx 'version=5.4.4' "$NORMALIZED"
+          grep -qx 'jvmProfileRevision=544' "$NORMALIZED"
+          grep -qx 'minimumClientHeapMb=3072' "$NORMALIZED"
+          grep -qx 'lowMemory3840MaxMb=3072' "$NORMALIZED"
+          grep -qx 'lowMemory4096MaxMb=3072' "$NORMALIZED"
+          grep -qx 'legacy539AutoMigrated=true' "$NORMALIZED"
+          grep -qx 'aggressiveServerGcFlagsRemoved=true' "$NORMALIZED"
+          grep -qx 'java21AdaptiveG1=true' "$NORMALIZED"
+          grep -qx 'lifecycle543Preserved=true' "$NORMALIZED"
+          EXPECTED="$(tr -d '\r' < "$HASHFILE" | awk '{print tolower($1)}')"
+          ACTUAL="$(sha256sum "$EXE" | awk '{print $1}')"
+          test "$EXPECTED" = "$ACTUAL"
+          test "$ACTUAL" = '21036f2b640afce187ce1e8e97b1147a6f2a2e4d1e43e136fe05f799dd0723cd'
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+          echo "hashfile=$HASHFILE" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Launcher 5.4.4
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXE: ${{ steps.verify.outputs.exe }}
+          HASHFILE: ${{ steps.verify.outputs.hashfile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create launcher-v5.4.4 "$EXE" "$HASHFILE" --repo "$GITHUB_REPOSITORY" --title "Bestiary Launcher 5.4.4" --notes "Minimum 3 GiB Minecraft heap, JVM profile 544, simplified Java 21 G1 tuning, legacy 539 migration, and preserved 5.4.3 lifecycle fixes."
