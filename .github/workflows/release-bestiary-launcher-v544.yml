@@ -1,10 +1,6 @@
 name: Release Bestiary Launcher 5.4.4 Memory Fix
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-bestiary-launcher-v544.yml'
   workflow_dispatch:
 
 permissions:
@@ -131,10 +127,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXE: ${{ steps.verify.outputs.exe }}
           HASHFILE: ${{ steps.verify.outputs.hashfile }}
+          SHA256: ${{ steps.verify.outputs.sha256 }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release delete launcher-v5.4.4 --repo "$GITHUB_REPOSITORY" --cleanup-tag -y 2>/dev/null || true
+          EXISTING="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/launcher-v5.4.4" --jq '.assets[] | select(.name=="BestiaryLauncher-Setup-5.4.4.exe") | .digest' 2>/dev/null || true)"
+          if [ -n "$EXISTING" ]; then
+            if [ "$EXISTING" = "sha256:$SHA256" ]; then
+              echo "Launcher 5.4.4 is already published with the same digest; keeping immutable release asset."
+              exit 0
+            fi
+            echo "Refusing to replace existing launcher-v5.4.4 asset: existing=$EXISTING build=sha256:$SHA256"
+            echo "Bump the launcher version instead of mutating a published asset."
+            exit 1
+          fi
           gh release create launcher-v5.4.4 "$EXE" "$HASHFILE" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Bestiary Launcher 5.4.4" \
