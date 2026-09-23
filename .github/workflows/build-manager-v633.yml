@@ -1,11 +1,11 @@
-name: Build Bestiary Pack Manager 6.3.4 Updater Auth Recovery
+name: Build Bestiary Pack Manager 6.3.5 Remote State Sync
 
 on:
   push:
     branches: [bestiary-manager-v6-3-3-upload-recovery]
     paths-ignore:
-      - manager-v633/ci-build.json
-      - manager-v633/ci-failure.json
+      - manager-v635/ci-build.json
+      - manager-v635/ci-failure.json
   workflow_dispatch:
 
 permissions:
@@ -70,6 +70,7 @@ jobs:
           Copy-Item manager-v632/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
           node manager-v632/patch-v632.cjs
           node manager-v633/patch-v633.cjs
+          node manager-v635/patch-v635.cjs
           $updater=Get-Content manager/src/main/services/AppUpdater.ts -Raw
           $main=Get-Content manager/src/main/index.ts -Raw
           $ui=Get-Content manager/src/renderer/src/App.tsx -Raw
@@ -78,8 +79,20 @@ jobs:
           if($main -notmatch 'BESTIARY_MANAGER_STARTUP_AUTO_UPDATE_V634'){throw 'main-process startup update check missing'}
           if($main -notmatch 'BESTIARY_MANAGER_EXTERNAL_BROWSER_V634' -or $main -notmatch 'rundll32\.exe'){throw 'Windows browser fallback missing'}
           if($ui -notmatch 'function GithubAuthOverlay' -or $ui -notmatch 'MỞ GITHUB' -or $ui -notmatch 'progress\.authCode'){throw 'GitHub device login UI missing'}
+          $workspace=Get-Content manager/src/main/services/WorkspaceService.ts -Raw
+          $main=Get-Content manager/src/main/index.ts -Raw
+          $store=Get-Content manager/src/renderer/src/store.ts -Raw
+          $ui=Get-Content manager/src/renderer/src/App.tsx -Raw
+          if($service -notmatch 'managerPolicy: files\.filter'){throw 'remote manager policy publish contract missing'}
+          if($service -notmatch 'async listRemoteReleases\(\)'){throw 'remote release catalog contract missing'}
+          if($service -notmatch 'async remotePublishedState\(\)'){throw 'remote published state contract missing'}
+          if($service -notmatch 'async promoteRemoteStable\('){throw 'remote stable promotion contract missing'}
+          if($workspace -notmatch 'async mergePublishedState\('){throw 'workspace policy hydration contract missing'}
+          if($main -notmatch 'listRemoteReleases' -or $main -notmatch 'syncWorkspaceFromRemote'){throw 'main remote sync wiring missing'}
+          if($store -notmatch 'window\.bestiary\.listReleases\(\)' -or $store -notmatch 'window\.bestiary\.getSnapshot\(\)'){throw 'renderer remote refresh missing'}
+          if($ui -notmatch 'Release Console 6\.3\.5'){throw 'Manager 6.3.5 UI marker missing'}
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
-          $pkg.version='6.3.4'
+          $pkg.version='6.3.5'
           $pkg.author='SVFrame Team Studio'
           $pkg|ConvertTo-Json -Depth 20|Set-Content manager/package.json -Encoding UTF8
           New-Item -ItemType Directory -Force manager/src/renderer/public|Out-Null
@@ -105,7 +118,7 @@ jobs:
             }finally{$bitmap.Dispose()}
           }finally{$source.Dispose()}
 
-      - name: Verify updater auth and upload recovery contracts
+      - name: Verify remote sync updater auth and upload recovery contracts
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -119,7 +132,7 @@ jobs:
           if($service -notmatch '--paginate' -or $service -notmatch '--slurp'){throw 'paginated asset inventory missing'}
           if($service -match 'interface AssetsResponse'){throw 'legacy name-only asset model still present'}
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
-          if($pkg.version -ne '6.3.4'){throw "Expected Manager 6.3.4, got $($pkg.version)"}
+          if($pkg.version -ne '6.3.5'){throw "Expected Manager 6.3.5, got $($pkg.version)"}
 
       - name: Install dependencies
         working-directory: manager
@@ -137,18 +150,18 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.4.exe -ErrorAction Stop
+          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.5.exe -ErrorAction Stop
           if($installer.Length -lt 1000000){throw 'Installer too small.'}
           $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt -Encoding ascii
-          Write-Host "MANAGER_634_SHA256=$hash"
+          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.5-SHA256.txt -Encoding ascii
+          Write-Host "MANAGER_635_SHA256=$hash"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.3.4
+          name: BestiaryPackManager-Windows-6.3.5
           path: |
-            manager/release/BestiaryPackManager-Setup-6.3.4.exe
-            manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.3.5.exe
+            manager/release/BestiaryPackManager-Setup-6.3.5-SHA256.txt
           retention-days: 7
           if-no-files-found: error
 
@@ -159,12 +172,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $tag='manager-v6.3.4'
-          $exe='manager/release/BestiaryPackManager-Setup-6.3.4.exe'
-          $sha='manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt'
+          $tag='manager-v6.3.5'
+          $exe='manager/release/BestiaryPackManager-Setup-6.3.5.exe'
+          $sha='manager/release/BestiaryPackManager-Setup-6.3.5-SHA256.txt'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if($LASTEXITCODE -ne 0){
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.4' --notes 'Sửa auto update và GitHub login: updater chạy từ main process, dùng Chromium network stack, cache-bust feed, khôi phục device-login modal và mở trình duyệt Windows bằng native URL handler có fallback. Giữ toàn bộ publisher upload recovery của 6.3.3.'
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.5' --notes 'Remote state sync: máy mới sau GitHub login đọc release history, stable/testing pointers và published mod policy trực tiếp từ distribution repo; publish mới lưu managerPolicy kể cả mod disabled; promote stable không còn phụ thuộc local release cache. Giữ updater/auth fix 6.3.4 và upload recovery 6.3.3.'
           }
           gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
 
@@ -175,7 +188,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt -Raw
+          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.5-SHA256.txt -Raw
           $hash=($line -split '\s+')[0]
           $m=[ordered]@{
             version='6.3.4'
@@ -183,7 +196,7 @@ jobs:
             sourceCommit=$env:GITHUB_SHA
             branch=$env:GITHUB_REF_NAME
             runId=[long]$env:GITHUB_RUN_ID
-            releaseTag='manager-v6.3.4'
+            releaseTag='manager-v6.3.5'
             starterAssetRecovery=$true
             uploadedOnlyReuse=$true
             transientRetry=$true
@@ -195,7 +208,7 @@ jobs:
             verified=$true
           }|ConvertTo-Json
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
-          $path='manager-v633/ci-build.json';$old=''
+          $path='manager-v635/ci-build.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
           $payload=@{message='Record verified Manager 6.3.4 updater/auth recovery build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
@@ -208,7 +221,7 @@ jobs:
         run: |
           $m=[ordered]@{version='6.3.4';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;verified=$false;status='failed'}|ConvertTo-Json
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
-          $path='manager-v633/ci-failure.json';$old=''
+          $path='manager-v635/ci-failure.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
           $payload=@{message='Record failed Manager 6.3.4 CI [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
