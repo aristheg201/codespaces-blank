@@ -55,18 +55,6 @@ const DEFAULT_MICROSOFT_CLIENT_ID = 'e4e89832-4229-46c3-90b1-a808ea750ec1';
     if (!s.includes(line)) s = line + '\n' + s;
   }
 
-  const classMarker = 'export class GithubDistributionService {';
-  req(s.includes(classMarker), 'GithubDistributionService class marker missing');
-  if (!s.includes('private bestiarySyncWorkspaceRoot: string | null = null;')) {
-    s = s.replace(classMarker, classMarker + "\n  private bestiarySyncWorkspaceRoot: string | null = null;");
-  }
-
-  const setRootPattern = /  setWorkspaceRoot\(([^)]*)\): void \{\n/;
-  req(setRootPattern.test(s), 'setWorkspaceRoot method marker missing');
-  if (!s.includes('this.bestiarySyncWorkspaceRoot = root ? bestiarySyncPath.resolve(root) : null;')) {
-    s = s.replace(setRootPattern, (match) => match + "    this.bestiarySyncWorkspaceRoot = root ? bestiarySyncPath.resolve(root) : null;\n");
-  }
-
   const helperMarker = '  private async repositoryDefaultBranch(repository: string): Promise<string> {';
   req(s.includes(helperMarker), 'remote helper marker missing');
   if (!s.includes('async pullStableToWorkspace()')) {
@@ -92,8 +80,8 @@ const DEFAULT_MICROSOFT_CLIENT_ID = 'e4e89832-4229-46c3-90b1-a808ea750ec1';
       "    }",
       "  }",
       "",
-      "  async pullStableToWorkspace(): Promise<{ version: string; downloaded: number; reused: number; total: number }> {",
-      "    const root = this.bestiarySyncWorkspaceRoot;",
+      "  async pullStableToWorkspace(workspaceRoot?: string): Promise<{ version: string; downloaded: number; reused: number; total: number }> {",
+      "    const root = workspaceRoot ? bestiarySyncPath.resolve(workspaceRoot) : null;",
       "    if (!root) throw new Error('Hãy chọn workspace trước khi đồng bộ.');",
       "    const repository = this.effectiveRepository();",
       "    const channelUrl = 'https://raw.githubusercontent.com/' + repository + '/main/bestiary-distribution/channels/stable.json?ts=' + Date.now();",
@@ -194,7 +182,7 @@ const DEFAULT_MICROSOFT_CLIENT_ID = 'e4e89832-4229-46c3-90b1-a808ea750ec1';
       "async function pullStableIfEmpty(): Promise<void> {",
       "  const snapshot = workspaceService.snapshot();",
       "  if (!snapshot.root || snapshot.files.length > 0) return;",
-      "  await distributionService.pullStableToWorkspace();",
+      "  await distributionService.pullStableToWorkspace(workspaceService.getRoot() || undefined);",
       "  await workspaceService.rescan();",
       "  await syncWorkspaceFromRemote();",
       "}",
@@ -214,7 +202,7 @@ const DEFAULT_MICROSOFT_CLIENT_ID = 'e4e89832-4229-46c3-90b1-a808ea750ec1';
   const promoteIpc = "  ipcMain.handle('release:promote', (_event, version: string) => distributionService.promoteRemoteStable(version));";
   req(s.includes(promoteIpc), 'remote promote IPC marker missing');
   if (!s.includes("ipcMain.handle('workspace:sync-stable'")) {
-    s = s.replace(promoteIpc, promoteIpc + "\n  ipcMain.handle('workspace:sync-stable', async () => { const result = await distributionService.pullStableToWorkspace(); await workspaceService.rescan(); await syncWorkspaceFromRemote(); return result; });");
+    s = s.replace(promoteIpc, promoteIpc + "\n  ipcMain.handle('workspace:sync-stable', async () => { const result = await distributionService.pullStableToWorkspace(workspaceService.getRoot() || undefined); await workspaceService.rescan(); await syncWorkspaceFromRemote(); return result; });");
   }
 
   const initMarker = "  distributionService = new GithubDistributionService(app.getPath('userData'), settings.distribution, sendProgress);";
