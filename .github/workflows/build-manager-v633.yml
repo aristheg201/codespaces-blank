@@ -123,7 +123,19 @@ jobs:
           if($workspace -notmatch 'async mergePublishedState\('){throw 'workspace policy hydration contract missing'}
           if($main -notmatch 'listRemoteReleases' -or $main -notmatch 'syncWorkspaceFromRemote'){throw 'main remote sync wiring missing'}
           if($store -notmatch 'window\.bestiary\.listReleases\(\)' -or $store -notmatch 'window\.bestiary\.getSnapshot\(\)'){throw 'renderer remote refresh missing'}
-          if($ui -notmatch 'Release Console 6\.3\.5'){throw 'Manager 6.3.6 UI marker missing'}
+          if($ui -notmatch 'Release Console 6\.3\.6'){throw 'Manager 6.3.6 UI marker missing'}
+          $settingsSource=Get-Content manager/src/main/services/SettingsService.ts -Raw
+          $preload=Get-Content manager/src/preload/index.ts -Raw
+          if($settingsSource -notmatch 'aristheg201/bestiary-distribution'){throw 'default distribution repository missing'}
+          if($settingsSource -notmatch 'e4e89832-4229-46c3-90b1-a808ea750ec1'){throw 'default Microsoft client ID missing'}
+          if($service -notmatch 'async pullStableToWorkspace\('){throw 'actual stable workspace sync missing'}
+          if($service -notmatch 'bestiarySyncNet\.fetch\(item\.downloadUrl'){throw 'stable object download transport missing'}
+          if($service -notmatch "bestiarySyncCreateHash\('sha256'\)"){throw 'stable object SHA256 verification missing'}
+          if($service -notmatch 'async fetchRemoteRuntimeConfig\(\)'){throw 'remote runtime config bootstrap missing'}
+          if($main -notmatch "workspace:sync-stable" -or $main -notmatch 'pullStableIfEmpty'){throw 'workspace stable sync IPC/auto pull missing'}
+          if($preload -notmatch "workspace:sync-stable"){throw 'stable sync preload API missing'}
+          if($store -notmatch 'syncStable: async'){throw 'stable sync store action missing'}
+          if($ui -notmatch 'ĐỒNG BỘ STABLE → WORKSPACE'){throw 'stable sync UI button missing'}
           if($service -notmatch "asset\.state === 'starter'"){throw 'starter cleanup contract missing'}
           if($service -notmatch "asset\.state === 'uploaded'"){throw 'uploaded-only reuse contract missing'}
           if($service -notmatch 'uploadObjectWithRecovery'){throw 'upload recovery helper missing'}
