@@ -79,18 +79,6 @@ jobs:
           if($main -notmatch 'BESTIARY_MANAGER_STARTUP_AUTO_UPDATE_V634'){throw 'main-process startup update check missing'}
           if($main -notmatch 'BESTIARY_MANAGER_EXTERNAL_BROWSER_V634' -or $main -notmatch 'rundll32\.exe'){throw 'Windows browser fallback missing'}
           if($ui -notmatch 'function GithubAuthOverlay' -or $ui -notmatch 'MỞ GITHUB' -or $ui -notmatch 'progress\.authCode'){throw 'GitHub device login UI missing'}
-          $workspace=Get-Content manager/src/main/services/WorkspaceService.ts -Raw
-          $main=Get-Content manager/src/main/index.ts -Raw
-          $store=Get-Content manager/src/renderer/src/store.ts -Raw
-          $ui=Get-Content manager/src/renderer/src/App.tsx -Raw
-          if($service -notmatch 'managerPolicy: files\.filter'){throw 'remote manager policy publish contract missing'}
-          if($service -notmatch 'async listRemoteReleases\(\)'){throw 'remote release catalog contract missing'}
-          if($service -notmatch 'async remotePublishedState\(\)'){throw 'remote published state contract missing'}
-          if($service -notmatch 'async promoteRemoteStable\('){throw 'remote stable promotion contract missing'}
-          if($workspace -notmatch 'async mergePublishedState\('){throw 'workspace policy hydration contract missing'}
-          if($main -notmatch 'listRemoteReleases' -or $main -notmatch 'syncWorkspaceFromRemote'){throw 'main remote sync wiring missing'}
-          if($store -notmatch 'window\.bestiary\.listReleases\(\)' -or $store -notmatch 'window\.bestiary\.getSnapshot\(\)'){throw 'renderer remote refresh missing'}
-          if($ui -notmatch 'Release Console 6\.3\.5'){throw 'Manager 6.3.5 UI marker missing'}
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
           $pkg.version='6.3.5'
           $pkg.author='SVFrame Team Studio'
@@ -123,6 +111,18 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $service=Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          $workspace=Get-Content manager/src/main/services/WorkspaceService.ts -Raw
+          $main=Get-Content manager/src/main/index.ts -Raw
+          $store=Get-Content manager/src/renderer/src/store.ts -Raw
+          $ui=Get-Content manager/src/renderer/src/App.tsx -Raw
+          if($service -notmatch 'managerPolicy: files\.filter'){throw 'remote manager policy publish contract missing'}
+          if($service -notmatch 'async listRemoteReleases\(\)'){throw 'remote release catalog contract missing'}
+          if($service -notmatch 'async remotePublishedState\(\)'){throw 'remote published state contract missing'}
+          if($service -notmatch 'async promoteRemoteStable\('){throw 'remote stable promotion contract missing'}
+          if($workspace -notmatch 'async mergePublishedState\('){throw 'workspace policy hydration contract missing'}
+          if($main -notmatch 'listRemoteReleases' -or $main -notmatch 'syncWorkspaceFromRemote'){throw 'main remote sync wiring missing'}
+          if($store -notmatch 'window\.bestiary\.listReleases\(\)' -or $store -notmatch 'window\.bestiary\.getSnapshot\(\)'){throw 'renderer remote refresh missing'}
+          if($ui -notmatch 'Release Console 6\.3\.5'){throw 'Manager 6.3.5 UI marker missing'}
           if($service -notmatch "asset\.state === 'starter'"){throw 'starter cleanup contract missing'}
           if($service -notmatch "asset\.state === 'uploaded'"){throw 'uploaded-only reuse contract missing'}
           if($service -notmatch 'uploadObjectWithRecovery'){throw 'upload recovery helper missing'}
@@ -165,7 +165,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Publish Manager 6.3.4 release
+      - name: Publish Manager 6.3.5 release
         if: success()
         shell: pwsh
         env:
