@@ -162,7 +162,7 @@ const DEFAULT_MICROSOFT_CLIENT_ID = 'e4e89832-4229-46c3-90b1-a808ea750ec1';
   ].join('\n');
   s = s.slice(0, remoteStart) + remoteReplacement + s.slice(remoteEnd);
 
-  req(s.includes('async pullStableToWorkspace()'), 'actual stable workspace sync missing');
+  req(s.includes('async pullStableToWorkspace('), 'actual stable workspace sync missing');
   req(s.includes('bestiarySyncNet.fetch(item.downloadUrl'), 'object download transport missing');
   req(s.includes("bestiarySyncCreateHash('sha256')"), 'sync SHA256 verification missing');
   req(s.includes('async fetchRemoteRuntimeConfig()'), 'remote config bootstrap missing');
