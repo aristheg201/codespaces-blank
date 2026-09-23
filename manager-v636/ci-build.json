@@ -1,0 +1,17 @@
+{
+  "version": "6.3.6",
+  "sha256": "c4d200fd9c903e6f9c045c40f435e1171eec9122dca56905f9858b96e8fd1ef3",
+  "sourceCommit": "4088ea7cfb247dc66e5f1f603f30a671511d0d9f",
+  "branch": "bestiary-manager-v6-3-3-upload-recovery",
+  "runId": 35813878616,
+  "releaseTag": "manager-v6.3.6",
+  "starterAssetRecovery": true,
+  "uploadedOnlyReuse": true,
+  "transientRetry": true,
+  "assetVerification": true,
+  "chromiumUpdater": true,
+  "mainProcessAutoUpdate": true,
+  "githubBrowserFallback": true,
+  "githubDeviceLoginUi": true,
+  "verified": true
+}
