@@ -26,3 +26,158 @@ req(s.includes('sha256:'), 'digest verification contract missing');
 
 fs.writeFileSync(p, s);
 console.log('Manager 6.3.3 stuck release-asset recovery patch applied.');
+
+
+// Manager 6.3.4 updater/browser/auth recovery.
+// This runs last in the reconstruction chain so later source snapshots cannot overwrite it.
+{
+  const updaterPath = 'manager/src/main/services/AppUpdater.ts';
+  let updater = fs.readFileSync(updaterPath, 'utf8').replace(/\r\n/g, '\n');
+  req(updater.includes("import { app } from 'electron';"), 'updater electron import marker missing');
+  updater = updater.replace("import { app } from 'electron';", "import { app, net } from 'electron';");
+  updater = updater.replace("import https from 'node:https';\n", '');
+
+  const getStart = updater.indexOf('function getBuffer(');
+  const classStart = updater.indexOf('export class AppUpdater');
+  req(getStart >= 0 && classStart > getStart, 'legacy updater transport block missing');
+  const netGetBuffer = [
+    '// BESTIARY_MANAGER_NET_UPDATER_V634',
+    "async function getBuffer(url:string,_redirects=0,progress?:(current:number,total:number)=>void):Promise<Buffer>{",
+    " const parsed=new URL(url);",
+    " if(parsed.protocol!=='https:')throw new Error('Updater chỉ chấp nhận HTTPS.');",
+    " const response=await net.fetch(parsed.toString(),{redirect:'follow',headers:{'User-Agent':'Bestiary-Manager-Updater/1.1','Accept':'*/*','Cache-Control':'no-cache','Pragma':'no-cache'}});",
+    " if(!response.ok)throw new Error('HTTP '+response.status+' khi tải updater.');",
+    " const total=Number(response.headers.get('content-length')||0)||0;",
+    " const data=Buffer.from(await response.arrayBuffer());",
+    " progress?.(data.length,total||data.length);",
+    " return data;",
+    "}",
+    ""
+  ].join('\n');
+  updater = updater.slice(0, getStart) + netGetBuffer + updater.slice(classStart);
+
+  const channelMarker = "const channel=JSON.parse((await getBuffer(CHANNEL_URL)).toString('utf8')) as UpdateChannel;";
+  req(updater.includes(channelMarker), 'updater channel fetch marker missing');
+  updater = updater.replace(
+    channelMarker,
+    "const channelUrl=new URL(CHANNEL_URL);channelUrl.searchParams.set('ts',String(Date.now()));const channel=JSON.parse((await getBuffer(channelUrl.toString())).toString('utf8')) as UpdateChannel;"
+  );
+  req(updater.includes('net.fetch'), 'Chromium updater transport missing');
+  req(!updater.includes('https.get'), 'legacy Node https updater transport survived');
+  fs.writeFileSync(updaterPath, updater);
+}
+
+{
+  const mainPath = 'manager/src/main/index.ts';
+  let main = fs.readFileSync(mainPath, 'utf8').replace(/\r\n/g, '\n');
+  if (!main.includes("from 'node:child_process'")) {
+    main = "import { spawn } from 'node:child_process';\n" + main;
+  }
+
+  const sendOld = [
+    'function sendProgress(progress: ProgressState): void {',
+    "  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('manager:progress', progress);",
+    '}'
+  ].join('\n');
+  req(main.includes(sendOld), 'sendProgress marker missing');
+  const sendNew = [
+    "let lastOpenedAuthCode = '';",
+    '',
+    '// BESTIARY_MANAGER_EXTERNAL_BROWSER_V634',
+    'async function openTrustedExternal(rawUrl: string): Promise<void> {',
+    '  const parsed = new URL(rawUrl);',
+    "  const host = parsed.hostname.toLowerCase();",
+    "  if (parsed.protocol !== 'https:' || (host !== 'github.com' && host !== 'www.github.com')) throw new Error('URL không hợp lệ.');",
+    '  const target = parsed.toString();',
+    "  if (process.platform !== 'win32') { await shell.openExternal(target); return; }",
+    '  await new Promise<void>((resolve, reject) => {',
+    "    const child = spawn('rundll32.exe', ['url.dll,FileProtocolHandler', target], { detached: true, stdio: 'ignore', windowsHide: true });",
+    '    let settled = false;',
+    "    child.once('spawn', () => { if (settled) return; settled = true; child.unref(); resolve(); });",
+    "    child.once('error', (error) => {",
+    '      if (settled) return;',
+    '      settled = true;',
+    '      void shell.openExternal(target).then(() => resolve(), () => reject(error));',
+    '    });',
+    '  });',
+    '}',
+    '',
+    'function sendProgress(progress: ProgressState): void {',
+    "  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('manager:progress', progress);",
+    "  if (progress.phase === 'auth' && progress.authCode && progress.authCode !== lastOpenedAuthCode) {",
+    '    lastOpenedAuthCode = progress.authCode;',
+    "    void openTrustedExternal(progress.authUrl || 'https://github.com/login/device').catch(() => undefined);",
+    '  }',
+    "  if (progress.phase === 'auth-cancelled') lastOpenedAuthCode = '';",
+    '}'
+  ].join('\n');
+  main = main.replace(sendOld, sendNew);
+
+  const extStart = main.indexOf("  ipcMain.handle('system:open-external'");
+  const extEnd = main.indexOf("  ipcMain.handle('distribution:ensure-repo'", extStart);
+  req(extStart >= 0 && extEnd > extStart, 'external URL IPC block missing');
+  main = main.slice(0, extStart)
+    + "  ipcMain.handle('system:open-external', async (_event, url: string) => openTrustedExternal(url));\n"
+    + main.slice(extEnd);
+
+  const readyMarker = '  await createWindow();\n}).catch';
+  req(main.includes(readyMarker), 'createWindow startup marker missing');
+  main = main.replace(
+    readyMarker,
+    "  await createWindow();\n  // BESTIARY_MANAGER_STARTUP_AUTO_UPDATE_V634\n  setTimeout(() => { void appUpdater.checkAndDownload(); }, 1200);\n}).catch"
+  );
+
+  req(main.includes("rundll32.exe"), 'Windows external browser fallback missing');
+  req(main.includes('BESTIARY_MANAGER_STARTUP_AUTO_UPDATE_V634'), 'main-process auto updater missing');
+  fs.writeFileSync(mainPath, main);
+}
+
+{
+  const uiPath = 'manager/src/renderer/src/App.tsx';
+  let ui = fs.readFileSync(uiPath, 'utf8').replace(/\r\n/g, '\n');
+  if (!ui.includes('  ProgressState,')) {
+    req(ui.includes('  ModSide,\n'), 'App type import marker missing');
+    ui = ui.replace('  ModSide,\n', '  ModSide,\n  ProgressState,\n');
+  }
+
+  const exportMarker = 'export default function App()';
+  req(ui.includes(exportMarker), 'App export marker missing');
+  if (!ui.includes('function GithubAuthOverlay(')) {
+    const authUi = [
+      "function GithubAuthOverlay({progress}:{progress:ProgressState}){",
+      " const cancelGithubAuth=useManager(s=>s.cancelGithubAuth);",
+      " const [openError,setOpenError]=useState<string|null>(null);",
+      " const openGithub=async()=>{try{setOpenError(null);await window.bestiary.openExternal(progress.authUrl||'https://github.com/login/device')}catch(error){setOpenError(error instanceof Error?error.message:String(error))}};",
+      " return <div className=\"fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm\"><section className=\"w-full max-w-md rounded-3xl border border-zinc-700 bg-[#101014] p-6 shadow-2xl\">",
+      "  <div className=\"text-[10px] font-black tracking-[.2em] text-red-400\">GITHUB DEVICE LOGIN</div><h2 className=\"mt-2 text-2xl font-black\">Đăng nhập GitHub</h2>",
+      "  <p className=\"mt-2 text-sm leading-6 text-zinc-400\">{progress.message||'Đang tạo phiên đăng nhập GitHub...'}</p>",
+      "  {progress.authCode&&<div className=\"mt-5 rounded-2xl border border-zinc-700 bg-black/40 p-5 text-center\"><div className=\"text-[9px] font-black tracking-[.18em] text-zinc-500\">MÃ XÁC THỰC</div><div className=\"mt-2 font-mono text-3xl font-black tracking-[.12em] text-white\">{progress.authCode}</div></div>}",
+      "  {openError&&<div className=\"mt-4 rounded-xl border border-red-500/30 bg-red-950/50 p-3 text-xs text-red-200\">{openError}</div>}",
+      "  <div className=\"mt-5 grid grid-cols-2 gap-3\"><button onClick={()=>void openGithub()} className=\"rounded-xl bg-white py-3 text-xs font-black text-black\">MỞ GITHUB</button><button onClick={()=>void cancelGithubAuth()} className=\"rounded-xl border border-zinc-700 bg-zinc-900 py-3 text-xs font-black text-zinc-300\">HỦY</button></div>",
+      "  <div className=\"mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800\"><div className=\"h-full w-1/3 animate-pulse rounded-full bg-red-500\"/></div>",
+      " </section></div>",
+      "}",
+      ""
+    ].join('\n');
+    ui = ui.replace(exportMarker, authUi + exportMarker);
+  }
+
+  const progressStart = ui.indexOf('{progress&&<div className="fixed bottom-5 left-[298px]');
+  const errorStart = ui.indexOf('{error&&<div className="fixed bottom-5 right-5', progressStart);
+  req(progressStart >= 0 && errorStart > progressStart, 'generic progress render marker missing');
+  const oldProgress = ui.slice(progressStart, errorStart);
+  req(oldProgress.endsWith('}'), 'generic progress expression malformed');
+  const genericExpression = oldProgress.slice(1, -1);
+  ui = ui.slice(0, progressStart)
+    + "{progress?.phase==='auth'?<GithubAuthOverlay progress={progress}/>:(" + genericExpression + ")}"
+    + ui.slice(errorStart);
+
+  ui = ui.replace('Release Console 6.3.2', 'Release Console 6.3.4');
+  ui = ui.replace("currentVersion:'6.3.0'", "currentVersion:'6.3.4'");
+  req(ui.includes('function GithubAuthOverlay('), 'GitHub auth modal missing');
+  req(ui.includes('MỞ GITHUB'), 'GitHub open button missing');
+  req(ui.includes('progress.authCode'), 'device auth code display missing');
+  fs.writeFileSync(uiPath, ui);
+}
+
+console.log('Manager 6.3.4 updater, browser and GitHub auth recovery patch applied.');

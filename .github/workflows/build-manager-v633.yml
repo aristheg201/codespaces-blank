@@ -1,4 +1,4 @@
-name: Build Bestiary Pack Manager 6.3.3 Upload Recovery
+name: Build Bestiary Pack Manager 6.3.4 Updater Auth Recovery
 
 on:
   push:
@@ -70,8 +70,16 @@ jobs:
           Copy-Item manager-v632/KeybindPolicyService.ts manager/src/main/services/KeybindPolicyService.ts -Force
           node manager-v632/patch-v632.cjs
           node manager-v633/patch-v633.cjs
+          $updater=Get-Content manager/src/main/services/AppUpdater.ts -Raw
+          $main=Get-Content manager/src/main/index.ts -Raw
+          $ui=Get-Content manager/src/renderer/src/App.tsx -Raw
+          if($updater -notmatch 'BESTIARY_MANAGER_NET_UPDATER_V634' -or $updater -notmatch 'net\.fetch'){throw 'Chromium updater transport missing'}
+          if($updater -match 'https\.get'){throw 'legacy Node https updater transport survived'}
+          if($main -notmatch 'BESTIARY_MANAGER_STARTUP_AUTO_UPDATE_V634'){throw 'main-process startup update check missing'}
+          if($main -notmatch 'BESTIARY_MANAGER_EXTERNAL_BROWSER_V634' -or $main -notmatch 'rundll32\.exe'){throw 'Windows browser fallback missing'}
+          if($ui -notmatch 'function GithubAuthOverlay' -or $ui -notmatch 'MỞ GITHUB' -or $ui -notmatch 'progress\.authCode'){throw 'GitHub device login UI missing'}
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
-          $pkg.version='6.3.3'
+          $pkg.version='6.3.4'
           $pkg.author='SVFrame Team Studio'
           $pkg|ConvertTo-Json -Depth 20|Set-Content manager/package.json -Encoding UTF8
           New-Item -ItemType Directory -Force manager/src/renderer/public|Out-Null
@@ -97,7 +105,7 @@ jobs:
             }finally{$bitmap.Dispose()}
           }finally{$source.Dispose()}
 
-      - name: Verify upload recovery contracts
+      - name: Verify updater auth and upload recovery contracts
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -111,7 +119,7 @@ jobs:
           if($service -notmatch '--paginate' -or $service -notmatch '--slurp'){throw 'paginated asset inventory missing'}
           if($service -match 'interface AssetsResponse'){throw 'legacy name-only asset model still present'}
           $pkg=Get-Content manager/package.json -Raw|ConvertFrom-Json
-          if($pkg.version -ne '6.3.3'){throw "Expected Manager 6.3.3, got $($pkg.version)"}
+          if($pkg.version -ne '6.3.4'){throw "Expected Manager 6.3.4, got $($pkg.version)"}
 
       - name: Install dependencies
         working-directory: manager
@@ -129,34 +137,34 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.3.exe -ErrorAction Stop
+          $installer=Get-Item manager/release/BestiaryPackManager-Setup-6.3.4.exe -ErrorAction Stop
           if($installer.Length -lt 1000000){throw 'Installer too small.'}
           $hash=(Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt -Encoding ascii
-          Write-Host "MANAGER_633_SHA256=$hash"
+          "$hash  $($installer.Name)"|Set-Content manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt -Encoding ascii
+          Write-Host "MANAGER_634_SHA256=$hash"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BestiaryPackManager-Windows-6.3.3
+          name: BestiaryPackManager-Windows-6.3.4
           path: |
-            manager/release/BestiaryPackManager-Setup-6.3.3.exe
-            manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt
+            manager/release/BestiaryPackManager-Setup-6.3.4.exe
+            manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt
           retention-days: 7
           if-no-files-found: error
 
-      - name: Publish Manager 6.3.3 release
+      - name: Publish Manager 6.3.4 release
         if: success()
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $tag='manager-v6.3.3'
-          $exe='manager/release/BestiaryPackManager-Setup-6.3.3.exe'
-          $sha='manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt'
+          $tag='manager-v6.3.4'
+          $exe='manager/release/BestiaryPackManager-Setup-6.3.4.exe'
+          $sha='manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if($LASTEXITCODE -ne 0){
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.3' --notes 'Publisher recovery: chỉ reuse release asset đã uploaded, tự dọn asset state=starter do upload đứt, retry transient GitHub upload failures và xác minh size/digest trước khi ghi manifest.'
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.3.4' --notes 'Sửa auto update và GitHub login: updater chạy từ main process, dùng Chromium network stack, cache-bust feed, khôi phục device-login modal và mở trình duyệt Windows bằng native URL handler có fallback. Giữ toàn bộ publisher upload recovery của 6.3.3.'
           }
           gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
 
@@ -167,25 +175,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.3-SHA256.txt -Raw
+          $line=Get-Content manager/release/BestiaryPackManager-Setup-6.3.4-SHA256.txt -Raw
           $hash=($line -split '\s+')[0]
           $m=[ordered]@{
-            version='6.3.3'
+            version='6.3.4'
             sha256=$hash
             sourceCommit=$env:GITHUB_SHA
             branch=$env:GITHUB_REF_NAME
             runId=[long]$env:GITHUB_RUN_ID
-            releaseTag='manager-v6.3.3'
+            releaseTag='manager-v6.3.4'
             starterAssetRecovery=$true
             uploadedOnlyReuse=$true
             transientRetry=$true
             assetVerification=$true
+            chromiumUpdater=$true
+            mainProcessAutoUpdate=$true
+            githubBrowserFallback=$true
+            githubDeviceLoginUi=$true
             verified=$true
           }|ConvertTo-Json
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
           $path='manager-v633/ci-build.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
-          $payload=@{message='Record verified Manager 6.3.3 upload recovery build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          $payload=@{message='Record verified Manager 6.3.4 updater/auth recovery build [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
 
       - name: Record failed build
@@ -194,9 +206,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $m=[ordered]@{version='6.3.3';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;verified=$false;status='failed'}|ConvertTo-Json
+          $m=[ordered]@{version='6.3.4';sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=[long]$env:GITHUB_RUN_ID;verified=$false;status='failed'}|ConvertTo-Json
           $enc=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
           $path='manager-v633/ci-failure.json';$old=''
           gh api "repos/$env:GITHUB_REPOSITORY/contents/${path}?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null|ForEach-Object{$old=$_}
-          $payload=@{message='Record failed Manager 6.3.3 CI [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
+          $payload=@{message='Record failed Manager 6.3.4 CI [skip ci]';content=$enc;branch=$env:GITHUB_REF_NAME};if($old){$payload.sha=$old}
           ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/${path}" --input - *> $null
