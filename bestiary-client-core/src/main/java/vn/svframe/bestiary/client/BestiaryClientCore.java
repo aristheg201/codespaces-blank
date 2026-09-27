@@ -4,6 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import vn.svframe.bestiary.client.cobblemon.PersistentAnimationCache;
 import vn.svframe.bestiary.client.config.PerformanceConfig;
 import vn.svframe.bestiary.client.resource.ZipResourceCache;
 
@@ -22,13 +23,23 @@ public final class BestiaryClientCore implements ClientModInitializer {
                 .orElse("unknown");
 
         LOGGER.info(
-                "Bestiary Client Core {} initialized. Lossless mode: zipByteCache={}, cobblemonAnimationIncremental={}, reloadProfiler={}, cacheBudget={} MiB, maxEntry={} KiB",
+                "Bestiary Client Core {} initialized. Lossless mode: zipByteCache={}, persistentCompiledCache={}, cobblemonAnimationIncremental={}, reloadProfiler={}, ramCacheBudget={} MiB, persistentBudget={} MiB",
                 version,
                 PerformanceConfig.zipByteCacheEnabled(),
+                PerformanceConfig.persistentCompiledCacheEnabled(),
                 PerformanceConfig.cobblemonAnimationIncrementalEnabled(),
                 PerformanceConfig.reloadProfilerEnabled(),
                 PerformanceConfig.cacheBudgetBytes() / (1024L * 1024L),
-                PerformanceConfig.maxCacheEntryBytes() / 1024
+                PerformanceConfig.persistentCacheBudgetBytes() / (1024L * 1024L)
         );
+
+        if (PerformanceConfig.persistentCompiledCacheEnabled()) {
+            LOGGER.info(
+                    "Bestiary compiled-cache schema={} environment={} directory={}",
+                    PersistentAnimationCache.SCHEMA_VERSION,
+                    PersistentAnimationCache.environmentIdShort(),
+                    PersistentAnimationCache.cacheDirectory()
+            );
+        }
     }
 }

@@ -16,7 +16,9 @@ public final class PerformanceConfig {
     private static volatile boolean zipByteCache = true;
     private static volatile boolean reloadProfiler = true;
     private static volatile boolean cobblemonAnimationIncremental = true;
+    private static volatile boolean persistentCompiledCache = true;
     private static volatile int configuredCacheMiB = 0;
+    private static volatile int persistentCacheMiB = 512;
     private static volatile int maxEntryKiB = 1024;
     private static volatile int logTopReloaders = 12;
 
@@ -38,7 +40,9 @@ public final class PerformanceConfig {
         zipByteCache = readBoolean(properties, "zipByteCache", true);
         reloadProfiler = readBoolean(properties, "reloadProfiler", true);
         cobblemonAnimationIncremental = readBoolean(properties, "cobblemonAnimationIncremental", true);
+        persistentCompiledCache = readBoolean(properties, "persistentCompiledCache", true);
         configuredCacheMiB = clamp(readInt(properties, "maxCacheMiB", 0), 0, 512);
+        persistentCacheMiB = clamp(readInt(properties, "persistentCacheMiB", 512), 64, 4096);
         maxEntryKiB = clamp(readInt(properties, "maxEntryKiB", 1024), 64, 8192);
         logTopReloaders = clamp(readInt(properties, "logTopReloaders", 12), 1, 64);
 
@@ -46,7 +50,9 @@ public final class PerformanceConfig {
             properties.setProperty("zipByteCache", Boolean.toString(zipByteCache));
             properties.setProperty("reloadProfiler", Boolean.toString(reloadProfiler));
             properties.setProperty("cobblemonAnimationIncremental", Boolean.toString(cobblemonAnimationIncremental));
+            properties.setProperty("persistentCompiledCache", Boolean.toString(persistentCompiledCache));
             properties.setProperty("maxCacheMiB", Integer.toString(configuredCacheMiB));
+            properties.setProperty("persistentCacheMiB", Integer.toString(persistentCacheMiB));
             properties.setProperty("maxEntryKiB", Integer.toString(maxEntryKiB));
             properties.setProperty("logTopReloaders", Integer.toString(logTopReloaders));
 
@@ -54,7 +60,7 @@ public final class PerformanceConfig {
                 Files.createDirectories(path.getParent());
                 try (OutputStream output = Files.newOutputStream(path)) {
                     properties.store(output,
-                            "Bestiary Client Core lossless performance settings. maxCacheMiB=0 selects a safe heap-aware budget.");
+                            "Bestiary Client Core lossless performance settings. maxCacheMiB=0 selects a safe heap-aware RAM budget.");
                 }
             } catch (IOException e) {
                 BestiaryClientCore.LOGGER.warn("Unable to create default config {}", path, e);
@@ -74,9 +80,17 @@ public final class PerformanceConfig {
         return cobblemonAnimationIncremental;
     }
 
+    public static boolean persistentCompiledCacheEnabled() {
+        return persistentCompiledCache;
+    }
+
     public static long cacheBudgetBytes() {
         int mib = configuredCacheMiB > 0 ? configuredCacheMiB : autoCacheMiB();
         return mib * 1024L * 1024L;
+    }
+
+    public static long persistentCacheBudgetBytes() {
+        return persistentCacheMiB * 1024L * 1024L;
     }
 
     public static int maxCacheEntryBytes() {

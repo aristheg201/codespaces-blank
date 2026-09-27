@@ -32,7 +32,7 @@ public final class AnimationGroupCache {
         return cached.group;
     }
 
-    public static synchronized void remember(Identifier id, byte[] hash, BedrockAnimationGroup group) {
+    public static synchronized void rememberValidated(Identifier id, byte[] hash, BedrockAnimationGroup group) {
         if (!isSafeToReuse(group)) {
             CACHE.remove(id);
             return;
@@ -54,10 +54,9 @@ public final class AnimationGroupCache {
 
     /**
      * Particle keyframes capture direct references to the particle repository at parse time.
-     * Reusing those groups across a particle-resource reload could retain a stale particle object,
-     * so they deliberately stay on Cobblemon's original parse path.
+     * Reusing those groups across a particle-resource reload could retain stale particle objects.
      */
-    private static boolean isSafeToReuse(BedrockAnimationGroup group) {
+    public static boolean isSafeToReuse(BedrockAnimationGroup group) {
         return group.getAnimations().values().stream()
                 .flatMap(animation -> animation.getEffects().stream())
                 .noneMatch(BedrockParticleKeyframe.class::isInstance);

@@ -1,60 +1,98 @@
-# Bestiary Client Core 0.2.0
+# Bestiary Client Core 0.3.0
 
 Client-only Fabric performance layer for Minecraft 1.21.1 / Java 21 / Cobblemon 1.8.x.
 
-## Non-negotiable contract
+## Contract: no gameplay or visual tradeoff
 
-This project is **lossless** by default. It does not reduce or alter:
+The mod does not lower render distance, simulation distance, entity distance, particles, mipmaps, texture quality, animation rate, AI, battle logic or tick behavior. Exact resource bytes and compatibility versions determine reuse. If a cache cannot be trusted, the normal Cobblemon path is used.
 
-- server or client gameplay ticks;
-- entity/AI/battle logic;
-- simulation distance or render distance;
-- spawn/despawn behavior;
-- particles, models, textures, animations or mipmaps;
-- packet semantics, save data or NBT;
-- Cobblemon species/form/aspect/variation selection.
+## What V3 changes
 
-If an optimization cannot prove semantic equivalence, the implementation falls back to the normal path.
+0.2.0 could reuse parsed animation groups only while the same Minecraft process remained open. A full launcher/game restart still lost that cache.
 
-## Why 0.2.0 exists
+0.3.0 adds an **L2 persistent compiled animation cache**.
 
-A real Bestiary client profile showed that the first server-pack reload still took about 12.6 seconds. The 0.1.0 ZIP byte cache had only 1 hit versus 11 misses, so ZIP re-open cost was not the main bottleneck.
-
-Cobblemon then loaded more than twenty thousand animations and the animation stage visibly occupied roughly five seconds. The vanilla baked-model reload also had several seconds of real prepare work.
-
-0.2.0 therefore stops treating ZIP lookup as the primary target and adds a Cobblemon-specific exact-content cache plus better per-listener CPU timing.
-
-## Incremental Cobblemon animation groups
-
-During the first resource generation, animation groups are parsed normally.
-
-For the next reload in the same game process:
-
-1. each animation JSON is read exactly;
-2. SHA-256 is computed over the exact bytes;
-3. unchanged groups reuse the already parsed Cobblemon object;
-4. changed/new groups are parsed normally;
-5. validation still runs;
-6. the completed generation is committed only after preparation succeeds.
-
-The cache is memory-only. Source JSON is not written anywhere.
-
-### Particle safety rule
-
-Cobblemon particle keyframes bind directly to particle objects while animation JSON is parsed. A particle definition may change even when its animation JSON does not.
-
-Therefore any animation group containing a particle keyframe is **never reused**. It stays on the original parse path. This intentionally gives up some cache hits to preserve correct particle behavior.
-
-## Profiler 2
-
-0.1.0 wall-time rankings were distorted by synchronization-barrier waits. 0.2.0 additionally times the actual Runnable work submitted to each reloader's prepare/apply executors and sorts the slow list by real executor time.
-
-Expected log format:
+Cold path for a new resource:
 
 ```
-[Reload #2] #1 ... executor=5233 ms (prepare=... apply=...), wall=..., barrier=...
-[Cobblemon animations] loaded ... reusableHits=... parsedMisses=... parse=... validate=...
+.animation.json
+  -> exact bytes
+  -> SHA-256
+  -> Cobblemon Gson + MoLang parse
+  -> validation
+  -> runtime BedrockAnimationGroup
+  -> content-addressed compiled cache on disk
 ```
+
+Hot path after restarting the game:
+
+```
+.animation.json
+  -> exact bytes
+  -> SHA-256
+  -> compiled-cache hit
+  -> deserialize BedrockAnimationGroup
+  -> runtime repository
+```
+
+The source JSON is never exported to the compiled-cache directory.
+
+## Cache correctness
+
+A persistent entry is accepted only when all of the following match:
+
+- cache schema;
+- Minecraft version;
+- Cobblemon version;
+- Java major/runtime target;
+- exact SHA-256 of the animation JSON;
+- binary payload CRC.
+
+The cache is content-addressed, so an unchanged animation group can survive a server resource-pack update even if other files changed.
+
+Corrupt, incompatible or undecodable entries are deleted and parsed through Cobblemon normally.
+
+## Validation and particle safety
+
+A group is written to persistent cache only after its animations successfully pass Cobblemon's normal `checkForErrors()` validation.
+
+Groups containing Bedrock particle keyframes are not persisted or memory-reused. Those keyframes capture direct particle repository references at parse time, so reuse across a particle reload could retain stale particle objects.
+
+This intentionally sacrifices some cache hits for correctness.
+
+## Disk layout
+
+```
+.minecraft/
+  .bestiary/
+    cache/
+      compiled/
+        animations/
+          v3/
+            ab/
+              ab...sha256.bca
+```
+
+The filenames are content hashes rather than resource names. The binary cache does not create a plaintext replacement resource pack.
+
+Writes use a temporary file plus atomic move where supported.
+
+## Bounded disk use
+
+Default persistent cache budget: 512 MiB.
+
+Old entries are evicted by last-use time when the budget is exceeded. Runtime objects required by the current Cobblemon generation are unaffected by disk eviction.
+
+## Profiler
+
+The existing reload profiler remains enabled. V3 also prints an animation-specific line:
+
+```
+[Cobblemon animations v3] ... memoryHits=... persistentHits=... parsedMisses=...
+hash=... diskLookup=... parse=... validate=... diskWrite=...
+```
+
+The first run with a new pack is expected to be the expensive population run. The important benchmark is a **complete game restart followed by joining the same server again**.
 
 ## Configuration
 
@@ -64,9 +102,17 @@ Expected log format:
 zipByteCache=true
 reloadProfiler=true
 cobblemonAnimationIncremental=true
+persistentCompiledCache=true
 maxCacheMiB=0
+persistentCacheMiB=512
 maxEntryKiB=1024
 logTopReloaders=12
 ```
 
-Set `cobblemonAnimationIncremental=false` to use Cobblemon's original animation loader without removing the mod.
+Disable only the persistent layer with:
+
+```properties
+persistentCompiledCache=false
+```
+
+The 0.2 memory cache and profiler can remain active.
