@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "bestiary_client_core",
+  "version": "${version}",
+  "name": "Bestiary Client Core",
+  "description": "Lossless client performance layer for Minecraft 1.21.1. Reduces redundant resource work without changing gameplay or visual fidelity.",
+  "authors": ["SVFrame Team Studio"],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "vn.svframe.bestiary.client.BestiaryClientCore"
+    ]
+  },
+  "mixins": [
+    "bestiary-client-core.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}
