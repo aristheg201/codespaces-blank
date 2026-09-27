@@ -240,7 +240,7 @@ public final class PersistentAnimationCache {
         String descriptor = "schema=" + SCHEMA_VERSION
                 + "\nminecraft=" + minecraft
                 + "\ncobblemon=" + cobblemon
-                + "\njava=" + java
+                + "\njava=" + javaVersion
                 + "\nkryo=5.6.2";
 
         try {
