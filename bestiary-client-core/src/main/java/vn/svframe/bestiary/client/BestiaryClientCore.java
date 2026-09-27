@@ -22,9 +22,10 @@ public final class BestiaryClientCore implements ClientModInitializer {
                 .orElse("unknown");
 
         LOGGER.info(
-                "Bestiary Client Core {} initialized. Lossless mode: zipByteCache={}, reloadProfiler={}, cacheBudget={} MiB, maxEntry={} KiB",
+                "Bestiary Client Core {} initialized. Lossless mode: zipByteCache={}, cobblemonAnimationIncremental={}, reloadProfiler={}, cacheBudget={} MiB, maxEntry={} KiB",
                 version,
                 PerformanceConfig.zipByteCacheEnabled(),
+                PerformanceConfig.cobblemonAnimationIncrementalEnabled(),
                 PerformanceConfig.reloadProfilerEnabled(),
                 PerformanceConfig.cacheBudgetBytes() / (1024L * 1024L),
                 PerformanceConfig.maxCacheEntryBytes() / 1024

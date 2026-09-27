@@ -7,6 +7,7 @@ import net.minecraft.util.profiler.Profiler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 public final class TimedResourceReloader implements ResourceReloader {
     private final long generation;
@@ -29,6 +30,8 @@ public final class TimedResourceReloader implements ResourceReloader {
         long started = System.nanoTime();
         AtomicLong preparedAt = new AtomicLong(-1L);
         AtomicLong barrierReleasedAt = new AtomicLong(-1L);
+        TimedExecutor timedPrepare = new TimedExecutor(prepareExecutor);
+        TimedExecutor timedApply = new TimedExecutor(applyExecutor);
 
         Synchronizer timedSynchronizer = new Synchronizer() {
             @Override
@@ -50,8 +53,8 @@ public final class TimedResourceReloader implements ResourceReloader {
                     manager,
                     prepareProfiler,
                     applyProfiler,
-                    prepareExecutor,
-                    applyExecutor
+                    timedPrepare,
+                    timedApply
             );
         } catch (Throwable throwable) {
             long now = System.nanoTime();
@@ -61,6 +64,10 @@ public final class TimedResourceReloader implements ResourceReloader {
                     now - started,
                     durationTo(started, preparedAt.get(), now),
                     barrierDuration(preparedAt.get(), barrierReleasedAt.get(), now),
+                    timedPrepare.elapsedNanos(),
+                    timedApply.elapsedNanos(),
+                    timedPrepare.taskCount(),
+                    timedApply.taskCount(),
                     true
             );
             throw throwable;
@@ -74,6 +81,10 @@ public final class TimedResourceReloader implements ResourceReloader {
                     finished - started,
                     durationTo(started, preparedAt.get(), finished),
                     barrierDuration(preparedAt.get(), barrierReleasedAt.get(), finished),
+                    timedPrepare.elapsedNanos(),
+                    timedApply.elapsedNanos(),
+                    timedPrepare.taskCount(),
+                    timedApply.taskCount(),
                     throwable != null
             );
         });
@@ -83,7 +94,11 @@ public final class TimedResourceReloader implements ResourceReloader {
 
     @Override
     public String getName() {
-        return delegate.getName();
+        String name = delegate.getName();
+        if (name == null || name.isBlank()) {
+            return delegate.getClass().getName();
+        }
+        return name + " [" + delegate.getClass().getName() + "]";
     }
 
     private static long durationTo(long started, long marker, long fallbackEnd) {
@@ -94,5 +109,36 @@ public final class TimedResourceReloader implements ResourceReloader {
         if (prepared < 0L) return 0L;
         long end = barrierReleased >= prepared ? barrierReleased : fallbackEnd;
         return end - prepared;
+    }
+
+    private static final class TimedExecutor implements Executor {
+        private final Executor delegate;
+        private final LongAdder elapsedNanos = new LongAdder();
+        private final LongAdder tasks = new LongAdder();
+
+        private TimedExecutor(Executor delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            delegate.execute(() -> {
+                long start = System.nanoTime();
+                try {
+                    command.run();
+                } finally {
+                    elapsedNanos.add(System.nanoTime() - start);
+                    tasks.increment();
+                }
+            });
+        }
+
+        long elapsedNanos() {
+            return elapsedNanos.sum();
+        }
+
+        long taskCount() {
+            return tasks.sum();
+        }
     }
 }

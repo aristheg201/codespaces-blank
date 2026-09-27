@@ -4,7 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "SimpleResourceReloadMixin",
-    "ZipResourcePackMixin"
+    "ZipResourcePackMixin",
+    "cobblemon.BedrockAnimationRepositoryMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,0 +1,55 @@
+name: Build Bestiary Client Core 0.2.0
+
+on:
+  push:
+    branches:
+      - bestiary-client-core-v0-2-0-cobblemon-incremental
+    paths:
+      - 'bestiary-client-core/**'
+      - '.github/workflows/build-bestiary-client-core-v0.2.0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
+
+      - name: Build lossless client core
+        run: gradle -p bestiary-client-core clean build --stacktrace --no-daemon
+
+      - name: Verify remapped runtime jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="$(find bestiary-client-core/build/libs -maxdepth 1 -type f -name 'bestiary-client-core-0.2.0.jar' -print -quit)"
+          test -n "$JAR"
+          jar tf "$JAR" | grep -q 'vn/svframe/bestiary/client/BestiaryClientCore.class'
+          jar tf "$JAR" | grep -q 'vn/svframe/bestiary/client/mixin/cobblemon/BedrockAnimationRepositoryMixin.class'
+          jar tf "$JAR" | grep -q 'bestiary-client-core.mixins.json'
+          echo "Verified $JAR"
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryClientCore-fabric-1.21.1-0.2.0
+          path: bestiary-client-core/build/libs/bestiary-client-core-0.2.0.jar
+          if-no-files-found: error
+          retention-days: 30

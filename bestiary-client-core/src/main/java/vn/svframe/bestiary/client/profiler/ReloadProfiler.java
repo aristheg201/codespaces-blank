@@ -44,6 +44,10 @@ public final class ReloadProfiler {
             long totalNanos,
             long prepareNanos,
             long barrierWaitNanos,
+            long prepareExecutorNanos,
+            long applyExecutorNanos,
+            long prepareTasks,
+            long applyTasks,
             boolean failed
     ) {
         Session session = SESSIONS.get(generation);
@@ -53,6 +57,10 @@ public final class ReloadProfiler {
                 Math.max(0L, totalNanos),
                 Math.max(0L, prepareNanos),
                 Math.max(0L, barrierWaitNanos),
+                Math.max(0L, prepareExecutorNanos),
+                Math.max(0L, applyExecutorNanos),
+                Math.max(0L, prepareTasks),
+                Math.max(0L, applyTasks),
                 failed
         ));
     }
@@ -73,7 +81,7 @@ public final class ReloadProfiler {
         ZipResourceCache.MetricsSnapshot cacheDelta = ZipResourceCache.snapshot().minus(session.cacheStart);
 
         List<ReloaderMetric> metrics = new ArrayList<>(session.metrics);
-        metrics.sort(Comparator.comparingLong(ReloaderMetric::totalNanos).reversed());
+        metrics.sort(Comparator.comparingLong(ReloaderMetric::executorNanos).reversed());
 
         BestiaryClientCore.LOGGER.info(
                 "[Reload #{}] completed in {} ms; reloaders={}/{}; failed={}; zipCache hits={}, misses={}, hitRate={}%, served={} KiB, newlyCached={} KiB, bypasses={}, evictions={}",
@@ -95,13 +103,17 @@ public final class ReloadProfiler {
         for (int i = 0; i < count; i++) {
             ReloaderMetric metric = metrics.get(i);
             BestiaryClientCore.LOGGER.info(
-                    "[Reload #{}] #{}/{} {} total={} ms prepare={} ms barrier={} ms failed={}",
+                    "[Reload #{}] #{}/{} {} executor={} ms (prepare={} ms/{} tasks, apply={} ms/{} tasks), wall={} ms, barrier={} ms, failed={}",
                     generation,
                     i + 1,
                     count,
                     metric.name(),
+                    millis(metric.executorNanos()),
+                    millis(metric.prepareExecutorNanos()),
+                    metric.prepareTasks(),
+                    millis(metric.applyExecutorNanos()),
+                    metric.applyTasks(),
                     millis(metric.totalNanos()),
-                    millis(metric.prepareNanos()),
                     millis(metric.barrierWaitNanos()),
                     metric.failed()
             );
@@ -140,7 +152,14 @@ public final class ReloadProfiler {
             long totalNanos,
             long prepareNanos,
             long barrierWaitNanos,
+            long prepareExecutorNanos,
+            long applyExecutorNanos,
+            long prepareTasks,
+            long applyTasks,
             boolean failed
     ) {
+        long executorNanos() {
+            return prepareExecutorNanos + applyExecutorNanos;
+        }
     }
 }

@@ -15,6 +15,7 @@ public final class PerformanceConfig {
 
     private static volatile boolean zipByteCache = true;
     private static volatile boolean reloadProfiler = true;
+    private static volatile boolean cobblemonAnimationIncremental = true;
     private static volatile int configuredCacheMiB = 0;
     private static volatile int maxEntryKiB = 1024;
     private static volatile int logTopReloaders = 12;
@@ -36,6 +37,7 @@ public final class PerformanceConfig {
 
         zipByteCache = readBoolean(properties, "zipByteCache", true);
         reloadProfiler = readBoolean(properties, "reloadProfiler", true);
+        cobblemonAnimationIncremental = readBoolean(properties, "cobblemonAnimationIncremental", true);
         configuredCacheMiB = clamp(readInt(properties, "maxCacheMiB", 0), 0, 512);
         maxEntryKiB = clamp(readInt(properties, "maxEntryKiB", 1024), 64, 8192);
         logTopReloaders = clamp(readInt(properties, "logTopReloaders", 12), 1, 64);
@@ -43,6 +45,7 @@ public final class PerformanceConfig {
         if (!Files.exists(path)) {
             properties.setProperty("zipByteCache", Boolean.toString(zipByteCache));
             properties.setProperty("reloadProfiler", Boolean.toString(reloadProfiler));
+            properties.setProperty("cobblemonAnimationIncremental", Boolean.toString(cobblemonAnimationIncremental));
             properties.setProperty("maxCacheMiB", Integer.toString(configuredCacheMiB));
             properties.setProperty("maxEntryKiB", Integer.toString(maxEntryKiB));
             properties.setProperty("logTopReloaders", Integer.toString(logTopReloaders));
@@ -65,6 +68,10 @@ public final class PerformanceConfig {
 
     public static boolean reloadProfilerEnabled() {
         return reloadProfiler;
+    }
+
+    public static boolean cobblemonAnimationIncrementalEnabled() {
+        return cobblemonAnimationIncremental;
     }
 
     public static long cacheBudgetBytes() {
