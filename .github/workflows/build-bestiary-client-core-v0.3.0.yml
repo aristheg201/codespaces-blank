@@ -44,7 +44,7 @@ jobs:
           jar tf "$JAR" | grep -q 'vn/svframe/bestiary/client/BestiaryClientCore.class'
           jar tf "$JAR" | grep -q 'vn/svframe/bestiary/client/cobblemon/PersistentAnimationCache.class'
           jar tf "$JAR" | grep -q 'vn/svframe/bestiary/client/mixin/cobblemon/BedrockAnimationRepositoryMixin.class'
-          jar tf "$JAR" | grep -q 'com/esotericsoftware/kryo/Kryo.class'
+          jar tf "$JAR" | grep -q 'META-INF/jars/kryo-'
           jar tf "$JAR" | grep -q 'bestiary-client-core.mixins.json'
           echo "Verified $JAR"
 
