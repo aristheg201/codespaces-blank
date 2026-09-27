@@ -236,7 +236,7 @@ public final class PersistentAnimationCache {
     private static byte[] buildEnvironmentId() {
         String minecraft = versionOf("minecraft");
         String cobblemon = versionOf("cobblemon");
-        String java = System.getProperty("java.specification.version", "unknown");
+        String javaVersion = System.getProperty("java.specification.version", "unknown");
         String descriptor = "schema=" + SCHEMA_VERSION
                 + "\nminecraft=" + minecraft
                 + "\ncobblemon=" + cobblemon
