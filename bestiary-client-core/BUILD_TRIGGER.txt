@@ -1,0 +1,1 @@
+Trigger Bestiary Client Core 0.1.0 build after initial source commit.
