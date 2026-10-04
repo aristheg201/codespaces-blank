@@ -157,7 +157,7 @@ export class KeybindSettingsService {
     const entries: KeybindEntry[] = [...parsed.values.entries()].map(([id, key]) => ({
       id,
       key,
-      label: VANILLA_LABELS[id] ?? humanize(id) || id,
+      label: VANILLA_LABELS[id] ?? (humanize(id) || id),
       category: categoryFor(id),
       locked: locked.has(id),
       conflictIds: conflicts.get(id) ?? [],
