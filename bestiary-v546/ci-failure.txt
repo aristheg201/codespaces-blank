@@ -1,0 +1,35 @@
+run=37216685159
+commit=230aeb2e704629985e71933e952885a9b56a2165
+branch=bestiary-launcher-v5-4-4-memory-fix
+
+=== Reconstruct verified 5.3.7 source without intermediate package builds ===
+Recovered launcher files: 12
+Launcher profile filtering hardened: untagged mod JARs are Full-only.
+Launcher preserves android-only manifest entries so desktop profiles correctly exclude them.
+Bestiary Launcher 5.3.0 Microsoft auth + player skin patch applied.
+Skin Bridge packaging switched to ASAR-safe read/write deployment.
+Bestiary Launcher 5.3.1 Minecraft lifecycle and updater cache hotfix applied.
+Bestiary Launcher 5.3.2 fresh remote/account configuration hotfix applied.
+Bestiary Launcher 5.3.3 local/offline identity policy wording applied.
+Bestiary Launcher 5.3.4 hybrid Local-direct / Microsoft-official-launcher bridge applied.
+Bestiary Launcher 5.3.5 Microsoft-identity / official-launcher flow applied with 5.3.3 UI preserved.
+Bestiary Launcher 5.3.6 lifecycle hotfix applied.
+Launcher 5.3.7 lifecycle, scrollbar and keybind policy patch applied.
+=== Apply 5.3.8 Microsoft RAM/JVM bridge fix ===
+Bestiary Launcher 5.3.8 Microsoft RAM/JVM bridge applied.
+=== Prepare packaging resources ===
+=== Fast-forward source patches 5.3.9 -> 5.4.5 without intermediate packaging ===
+Bestiary Launcher 5.3.9 adaptive JVM generator applied.
+Bestiary Launcher 5.4.0 approved Microsoft Game Services patch applied.
+Bestiary Launcher 5.4.1 direct Microsoft routing fix applied.
+Bestiary Launcher 5.4.2 forced direct Microsoft runtime patch applied.
+Bestiary Launcher 5.4.3 lifecycle patch applied.
+Bestiary Launcher 5.4.4 low-memory JVM patch applied.
+Bestiary Launcher 5.4.5 auto-hide and keybind settings patch applied.
+=== Apply 5.4.6 Pack Manager keybind integration ===
+WriteError: D:\a\codespaces-blank\codespaces-blank\bestiary-v546\build.ps1:216
+Line |
+ 216 |  $home = (Get-Content $homePath -Raw).Replace('5.4.5', '5.4.6')
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot overwrite variable HOME because it is read-only or constant.
+
