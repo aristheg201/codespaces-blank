@@ -75,7 +75,11 @@ export function KeybindPanel() {
       event.preventDefault();
       event.stopPropagation();
       if (event.button < 0 || event.button > 7) return;
-      setDraft((current) => ({ ...current, [captureId]: 'key.mouse.' + String(event.button + 1) }));
+      const mouseKey = event.button === 0 ? 'key.mouse.left'
+        : event.button === 1 ? 'key.mouse.right'
+          : event.button === 2 ? 'key.mouse.middle'
+            : 'key.mouse.' + String(event.button + 1);
+      setDraft((current) => ({ ...current, [captureId]: mouseKey }));
       setCaptureId(null);
     };
     window.addEventListener('keydown', onKey, true);
