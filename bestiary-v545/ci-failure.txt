@@ -1,0 +1,303 @@
+run=37212386726
+commit=dbb2257b2274324e198d6109543b6d1b042d2dae
+branch=bestiary-launcher-v5-4-4-memory-fix
+
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z size=5.6 MB parts=1
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z duration=365ms
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.3.8.exe archs=x64 oneClick=false perMachine=false
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z size=1.3 MB parts=1
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z duration=274ms
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z size=731 kB parts=1
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-resources-3.4.1/nsis-resources-3.4.1.7z duration=290ms
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.3.8.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.3.8.exe.blockmap
+=== Verify Microsoft runtime bridge contracts ===
+=== Smoke patched 5.3.8 binary ===
+Launcher 5.3.8 SHA256: 4719db3297e9cfebd9c3e8d1e24ad2b2297ce981e79c1212271c1bee654f2e1f
+Launcher 5.3.8 Microsoft RAM/JVM bridge build completed.
+=== Apply 5.3.9 adaptive JVM generator ===
+Bestiary Launcher 5.3.9 adaptive JVM generator applied.
+
+> bestiary-launcher@5.3.9 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.3.9 dist:win
+> npm run build && electron-builder --config electron-builder.json --win nsis --x64
+
+
+> bestiary-launcher@5.3.9 build
+> npm run typecheck && npm run build:renderer && npm run build:main
+
+
+> bestiary-launcher@5.3.9 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.3.9 build:renderer
+> vite build --config vite.config.ts
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 47 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.34 kB[22m
+[2m../../dist-renderer/[22m[35massets/index-ecuuhBde.css  [39m[1m[2m 47.15 kB[22m[1m[22m[2m │ gzip: 10.95 kB[22m
+[2m../../dist-renderer/[22m[36massets/index-BdUCgRaO.js   [39m[1m[2m224.26 kB[22m[1m[22m[2m │ gzip: 70.17 kB[22m
+[32m✓ built in 3m 15s[39m
+
+> bestiary-launcher@5.3.9 build:main
+> tsc -p tsconfig.main.json
+
+  • electron-builder  version=26.0.12 os=10.0.26100
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=D:\a\codespaces-blank\codespaces-blank\source\electron-builder.json
+  • executing @electron/rebuild  electronVersion=37.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.3.9.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.3.9.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.3.9.exe.blockmap
+=== Verify adaptive generator contracts ===
+=== Execute deterministic 4/6/8/12/16 GB generator tests ===
+Adaptive JVM generator hardware matrix passed.
+(node:3748) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/a/codespaces-blank/codespaces-blank/source/src/main/core/JvmProfileGenerator.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\a\codespaces-blank\codespaces-blank\source\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+=== Validate generated low-memory flags on Java 21 ===
+openjdk version "21.0.12.1" 2026-08-18 LTS
+OpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode, sharing)
+=== Smoke Launcher 5.3.9 binary ===
+Launcher 5.3.9 SHA256: eee7ff1351d692bfeea801b39222ea95a12d2853c66bdf5033073583d3443ece
+Launcher 5.3.9 adaptive JVM generator build completed.
+=== Apply approved Microsoft Game Services patch for 5.4.0 ===
+Bestiary Launcher 5.4.0 approved Microsoft Game Services patch applied.
+
+> bestiary-launcher@5.4.0 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.0 dist:win
+> npm run build && electron-builder --config electron-builder.json --win nsis --x64
+
+
+> bestiary-launcher@5.4.0 build
+> npm run typecheck && npm run build:renderer && npm run build:main
+
+
+> bestiary-launcher@5.4.0 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.0 build:renderer
+> vite build --config vite.config.ts
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 47 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.34 kB[22m
+[2m../../dist-renderer/[22m[35massets/index-ecuuhBde.css  [39m[1m[2m 47.15 kB[22m[1m[22m[2m │ gzip: 10.95 kB[22m
+[2m../../dist-renderer/[22m[36massets/index-nlmRz_OR.js   [39m[1m[2m224.26 kB[22m[1m[22m[2m │ gzip: 70.16 kB[22m
+[32m✓ built in 3m 5s[39m
+
+> bestiary-launcher@5.4.0 build:main
+> tsc -p tsconfig.main.json
+
+  • electron-builder  version=26.0.12 os=10.0.26100
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=D:\a\codespaces-blank\codespaces-blank\source\electron-builder.json
+  • executing @electron/rebuild  electronVersion=37.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.4.0.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.4.0.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.4.0.exe.blockmap
+=== Verify 5.4.0 approved Microsoft contracts ===
+=== Smoke Launcher 5.4.0 binary ===
+Launcher 5.4.0 SHA256: 4cf5a4bb2d7b64dde51dcc7fbcab2a6d95550831e06d81cad7943680bad06bea
+Launcher 5.4.0 approved Microsoft Game Services build completed.
+=== Apply 5.4.1 direct Microsoft routing fix ===
+Bestiary Launcher 5.4.1 direct Microsoft routing fix applied.
+
+> bestiary-launcher@5.4.1 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.1 dist:win
+> npm run build && electron-builder --config electron-builder.json --win nsis --x64
+
+
+> bestiary-launcher@5.4.1 build
+> npm run typecheck && npm run build:renderer && npm run build:main
+
+
+> bestiary-launcher@5.4.1 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.1 build:renderer
+> vite build --config vite.config.ts
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 47 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
+[2m../../dist-renderer/[22m[35massets/index-ecuuhBde.css  [39m[1m[2m 47.15 kB[22m[1m[22m[2m │ gzip: 10.95 kB[22m
+[2m../../dist-renderer/[22m[36massets/index-D2k36qgg.js   [39m[1m[2m224.26 kB[22m[1m[22m[2m │ gzip: 70.17 kB[22m
+[32m✓ built in 3m 17s[39m
+
+> bestiary-launcher@5.4.1 build:main
+> tsc -p tsconfig.main.json
+
+  • electron-builder  version=26.0.12 os=10.0.26100
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=D:\a\codespaces-blank\codespaces-blank\source\electron-builder.json
+  • executing @electron/rebuild  electronVersion=37.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.4.1.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.4.1.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.4.1.exe.blockmap
+=== Verify 5.4.1 Microsoft routing contracts ===
+=== Smoke Launcher 5.4.1 binary ===
+Launcher 5.4.1 SHA256: ded8c9055aec848037abc8785c5a6b1a4b465265801acda62bdd06607727afaa
+Launcher 5.4.1 direct Microsoft routing build completed.
+=== Apply 5.4.2 forced direct Microsoft runtime patch ===
+Bestiary Launcher 5.4.2 forced direct Microsoft runtime patch applied.
+
+> bestiary-launcher@5.4.2 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.2 dist:win
+> npm run build && electron-builder --config electron-builder.json --win nsis --x64
+
+
+> bestiary-launcher@5.4.2 build
+> npm run typecheck && npm run build:renderer && npm run build:main
+
+
+> bestiary-launcher@5.4.2 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.2 build:renderer
+> vite build --config vite.config.ts
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 47 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.35 kB[22m
+[2m../../dist-renderer/[22m[35massets/index-ecuuhBde.css  [39m[1m[2m 47.15 kB[22m[1m[22m[2m │ gzip: 10.95 kB[22m
+[2m../../dist-renderer/[22m[36massets/index-BAI9szOO.js   [39m[1m[2m224.26 kB[22m[1m[22m[2m │ gzip: 70.17 kB[22m
+[32m✓ built in 3m 18s[39m
+
+> bestiary-launcher@5.4.2 build:main
+> tsc -p tsconfig.main.json
+
+  • electron-builder  version=26.0.12 os=10.0.26100
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=D:\a\codespaces-blank\codespaces-blank\source\electron-builder.json
+  • executing @electron/rebuild  electronVersion=37.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.4.2.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.4.2.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.4.2.exe.blockmap
+=== Verify 5.4.2 direct Microsoft runtime contracts ===
+=== Smoke Launcher 5.4.2 binary ===
+Launcher 5.4.2 SHA256: dac45839863ca34a294663a53d9603ab096f552e8035e8a0bd605951bf53c574
+Launcher 5.4.2 forced direct Microsoft runtime build completed.
+=== Apply 5.4.3 lifecycle fix ===
+Bestiary Launcher 5.4.3 lifecycle patch applied.
+
+> bestiary-launcher@5.4.3 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.3 dist:win
+> npm run build && electron-builder --config electron-builder.json --win nsis --x64
+
+
+> bestiary-launcher@5.4.3 build
+> npm run typecheck && npm run build:renderer && npm run build:main
+
+
+> bestiary-launcher@5.4.3 typecheck
+> tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit
+
+
+> bestiary-launcher@5.4.3 build:renderer
+> vite build --config vite.config.ts
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 47 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../dist-renderer/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:  0.34 kB[22m
+[2m../../dist-renderer/[22m[35massets/index-ecuuhBde.css  [39m[1m[2m 47.15 kB[22m[1m[22m[2m │ gzip: 10.95 kB[22m
+[2m../../dist-renderer/[22m[36massets/index-DwWoTX01.js   [39m[1m[2m224.26 kB[22m[1m[22m[2m │ gzip: 70.17 kB[22m
+[32m✓ built in 3m 9s[39m
+
+> bestiary-launcher@5.4.3 build:main
+> tsc -p tsconfig.main.json
+
+  • electron-builder  version=26.0.12 os=10.0.26100
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=D:\a\codespaces-blank\codespaces-blank\source\electron-builder.json
+  • executing @electron/rebuild  electronVersion=37.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=37.2.6 appOutDir=release\win-unpacked
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Bestiary Launcher.exe
+  • signing with signtool.exe  path=release\win-unpacked\Bestiary Launcher.exe
+  • building        target=nsis file=release\BestiaryLauncher-Setup-5.4.3.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\__uninstaller-nsis-bestiary-launcher.exe
+  • signing with signtool.exe  path=release\BestiaryLauncher-Setup-5.4.3.exe
+  • building block map  blockMapFile=release\BestiaryLauncher-Setup-5.4.3.exe.blockmap
+=== Verify 5.4.3 lifecycle source contracts ===
+=== Runtime lifecycle test: open -> close -> process gone -> reopen ===
+First launcher window ready: PID=5380 HWND=589984
+First launcher instance exited cleanly after window close.
+
+Exception: D:\a\codespaces-blank\codespaces-blank\bestiary-v543\build.ps1:106
+Line |
+ 106 |    throw 'Launcher failed to create a visible window after close-and-r …
+     |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Launcher failed to create a visible window after close-and-reopen.
+
