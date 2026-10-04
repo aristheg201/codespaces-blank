@@ -1,0 +1,106 @@
+name: Build Bestiary Launcher 5.4.7
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-4-4-memory-fix]
+    paths:
+      - 'bestiary-v547/**'
+      - '.github/workflows/build-bestiary-launcher-v547.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 100
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and verify Launcher 5.4.7
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          try {
+            & ./bestiary-v547/build.ps1 *>&1 | Tee-Object -FilePath ci-v547.log
+            if($LASTEXITCODE -ne 0){throw "5.4.7 build returned $LASTEXITCODE"}
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath ci-v547.log -Append
+            throw
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.4.7
+          path: |
+            build-output-v547/BestiaryLauncher-Setup-5.4.7.exe
+            build-output-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt
+            build-output-v547/feature-contract.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish Launcher 5.4.7 release
+        if: success() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $tag='launcher-v5.4.7'
+          $exe='build-output-v547/BestiaryLauncher-Setup-5.4.7.exe'
+          $sha='build-output-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if($LASTEXITCODE -ne 0){
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Bestiary Launcher 5.4.7' --notes 'Launcher 5.4.7 adds startup auto-update: after the main window is created, it automatically checks and downloads from the launcher product channel. Pack Manager 6.3.6 already has startup auto-update; both products use bestiary-distribution/app-updates.json. Existing keybind editor, Pack Manager KEYBINDS tab, auto-hide/restore and JVM profile are preserved.'
+          }
+          gh release upload $tag $exe $sha --repo $env:GITHUB_REPOSITORY --clobber
+
+      - name: Record verified 5.4.7 build
+        if: success() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $line=Get-Content build-output-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt -Raw
+          $hash=($line -split '\s+')[0].Trim().ToLowerInvariant()
+          $manifest=[ordered]@{version='5.4.7';sha256=$hash;sourceCommit=$env:GITHUB_SHA;branch=$env:GITHUB_REF_NAME;runId=$env:GITHUB_RUN_ID;minimumClientHeapMb=3072;packManagerKeybindTab=$true;packManagerUsesSharedKeybindEditor=$true;vanillaAndModdedKeybinds=$true;keybindConflictDetection=$true;keybindLockedPolicyAware=$true;autoHideOnMinecraftRunning=$true;restoreLauncherOnMinecraftStop=$true;startupAutoUpdate=$true;releasePublished=$true;verified=$true}|ConvertTo-Json -Depth 4
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $path='bestiary-v547/ci-build.json';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record verified Bestiary Launcher 5.4.7 build [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
+
+      - name: Record 5.4.7 CI failure
+        if: failure() && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tail=if(Test-Path ci-v547.log){(Get-Content ci-v547.log -Tail 300)-join "`n"}else{'No build log.'}
+          $text="run=$env:GITHUB_RUN_ID`ncommit=$env:GITHUB_SHA`nbranch=$env:GITHUB_REF_NAME`n`n$tail"
+          $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+          $path='bestiary-v547/ci-failure.txt';$existing=''
+          gh api "repos/$env:GITHUB_REPOSITORY/contents/$path?ref=$($env:GITHUB_REF_NAME)" --jq '.sha' 2>$null | ForEach-Object{$existing=$_}
+          $payload=@{message='Record Bestiary Launcher 5.4.7 CI failure [skip ci]';content=$encoded;branch=$env:GITHUB_REF_NAME};if($existing){$payload.sha=$existing}
+          ($payload|ConvertTo-Json -Compress)|gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/$path" --input - *> $null
