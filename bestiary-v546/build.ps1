@@ -223,6 +223,13 @@ foreach ($rel in @('source/src/main/core/AccountService.ts','source/src/main/cor
 }
 
 Push-Location source
+npm install --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
+npm install adm-zip@0.5.16 --save --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'adm-zip install failed.' }
+npm install -D @types/adm-zip@0.5.7 --save-dev --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw '@types/adm-zip install failed.' }
+
 $pkg = Get-Content package.json -Raw | ConvertFrom-Json
 $pkg.version = '5.4.6'
 $pkg.author = 'SVFrame Team Studio'
