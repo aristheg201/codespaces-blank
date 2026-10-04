@@ -1,0 +1,43 @@
+name: Publish verified Bestiary Launcher 5.4.7 artifact
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-4-4-memory-fix]
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v547-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified 5.4.7 artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force publish-v547 | Out-Null
+          gh run download 37217794254 --repo $env:GITHUB_REPOSITORY --name BestiaryLauncher-Windows-5.4.7 --dir publish-v547
+          $exe=Get-Item publish-v547/BestiaryLauncher-Setup-5.4.7.exe -ErrorAction Stop
+          $hash=(Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($hash -ne '85c143dfc3b3e4065a2625b5f943193230d51dc4ab71ac13f60b44f825eabba3'){throw "Unexpected 5.4.7 SHA256: $hash"}
+          "$hash  BestiaryLauncher-Setup-5.4.7.exe" | Set-Content publish-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt -Encoding ascii
+
+      - name: Upload verified assets to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          gh release upload launcher-v5.4.7 publish-v547/BestiaryLauncher-Setup-5.4.7.exe publish-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt --repo $env:GITHUB_REPOSITORY --clobber
+          $assets=gh release view launcher-v5.4.7 --repo $env:GITHUB_REPOSITORY --json assets | ConvertFrom-Json
+          $names=@($assets.assets.name)
+          if($names -notcontains 'BestiaryLauncher-Setup-5.4.7.exe'){throw '5.4.7 installer missing after publish.'}
+          if($names -notcontains 'BestiaryLauncher-Setup-5.4.7-SHA256.txt'){throw '5.4.7 SHA file missing after publish.'}
