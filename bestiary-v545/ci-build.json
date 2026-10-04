@@ -1,0 +1,16 @@
+{
+  "version": "5.4.5",
+  "sha256": "7edc2bb1ba1f4be43d3c2e0f7192d8bd8e2581094f6e1ccdca1628a42e7642a1",
+  "sourceCommit": "71120eb1721030f3028d83821bb099496b9812b7",
+  "branch": "bestiary-launcher-v5-4-4-memory-fix",
+  "runId": "37212650223",
+  "minimumClientHeapMb": 3072,
+  "autoHideOnMinecraftRunning": true,
+  "restoreLauncherOnMinecraftStop": true,
+  "keybindOptionsEditor": true,
+  "keybindConflictDetection": true,
+  "keybindLockedPolicyAware": true,
+  "keybindAtomicSave": true,
+  "releasePublished": true,
+  "verified": true
+}
