@@ -1,0 +1,19 @@
+.keybind-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.keybind-toolbar input{flex:1;min-width:0}
+.keybind-toolbar button,.keybind-actions button,.keybind-value button{cursor:pointer}
+.keybind-list{display:flex;flex-direction:column;gap:8px;max-height:48vh;overflow:auto;padding-right:4px}
+.keybind-row{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:11px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)}
+.keybind-row.conflict{border-color:rgba(255,166,0,.55)}
+.keybind-row.locked{opacity:.74}
+.keybind-meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+.keybind-meta>span{font-size:10px;letter-spacing:.12em;opacity:.55}
+.keybind-meta>strong{font-size:13px}
+.keybind-meta>small{font-size:10px;opacity:.42;word-break:break-all}
+.keybind-value{display:flex;align-items:flex-end;flex-direction:column;gap:5px;min-width:210px}
+.keybind-value>button:not(.keybind-clear){min-width:150px;padding:8px 11px;border-radius:8px}
+.keybind-value>button.capturing{outline:2px solid rgba(255,120,70,.7)}
+.keybind-clear{font-size:10px;opacity:.72;background:transparent;border:0}
+.keybind-warning{font-size:10px;color:#ffb45e;text-align:right}
+.keybind-locked{font-size:10px;letter-spacing:.1em;opacity:.6}
+.keybind-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+@media(max-width:760px){.keybind-row{align-items:stretch;flex-direction:column}.keybind-value{min-width:0;align-items:stretch}.keybind-warning{text-align:left}}
