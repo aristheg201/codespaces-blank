@@ -2,9 +2,31 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoRoot
 
-Write-Host '=== Rebuild verified Launcher 5.4.4 baseline ==='
-& './bestiary-v544/build.ps1'
-if ($LASTEXITCODE -ne 0) { throw "Launcher 5.4.4 baseline build failed with code $LASTEXITCODE" }
+Write-Host '=== Reconstruct verified Launcher 5.3.8 baseline once ==='
+& './bestiary-v538/build.ps1'
+if ($LASTEXITCODE -ne 0) { throw "Launcher 5.3.8 baseline build failed with code $LASTEXITCODE" }
+
+Write-Host '=== Fast-forward source patches 5.3.9 -> 5.4.4 without intermediate packaging ==='
+Copy-Item 'bestiary-v539/JvmProfileGenerator.ts' 'source/src/main/core/JvmProfileGenerator.ts' -Force
+python 'bestiary-v539/patch_v539.py'
+if ($LASTEXITCODE -ne 0) { throw '5.3.9 source patch failed.' }
+$main539 = Get-Content 'source/src/main/index.ts' -Raw
+$oldProfile = '      profile: settings.clientProfile,'
+if (-not $main539.Contains($oldProfile)) { throw 'SyncEngine client profile marker missing.' }
+$main539 = $main539.Replace($oldProfile, '      profile: settings.clientProfile ?? undefined,')
+Set-Content 'source/src/main/index.ts' $main539 -Encoding UTF8
+
+python 'bestiary-v540/patch_v540.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.0 source patch failed.' }
+python 'bestiary-v541/patch_v541.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.1 source patch failed.' }
+python 'bestiary-v542/patch_v542.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.2 source patch failed.' }
+python 'bestiary-v543/patch_v543.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.3 source patch failed.' }
+Copy-Item 'bestiary-v544/JvmProfileGenerator.ts' 'source/src/main/core/JvmProfileGenerator.ts' -Force
+python 'bestiary-v544/patch_v544.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.4 source patch failed.' }
 
 Write-Host '=== Apply 5.4.5 auto-hide + keybind settings ==='
 Copy-Item 'bestiary-v545/KeybindSettingsService.ts' 'source/src/main/core/KeybindSettingsService.ts' -Force
