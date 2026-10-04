@@ -213,8 +213,8 @@ if ($appSource -notmatch "currentVersion: '5\.4\.6'") { throw 'Unable to bump Ap
 Set-Content $appPath $appSource -Encoding UTF8
 
 $homePath = 'source/src/renderer/src/components/Home.tsx'
-$home = (Get-Content $homePath -Raw).Replace('5.4.5', '5.4.6')
-Set-Content $homePath $home -Encoding UTF8
+$homeSource = (Get-Content $homePath -Raw).Replace('5.4.5', '5.4.6')
+Set-Content $homePath $homeSource -Encoding UTF8
 
 foreach ($rel in @('source/src/main/core/AccountService.ts','source/src/main/core/RemoteService.ts')) {
   $text = (Get-Content $rel -Raw).Replace('BestiaryLauncher/5.4.5', 'BestiaryLauncher/5.4.6')
