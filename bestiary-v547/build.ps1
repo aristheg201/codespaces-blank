@@ -190,8 +190,8 @@ Copy-Item 'bestiary-v545/KeybindPanel.css' 'source/src/renderer/src/components/K
 python 'bestiary-v545/patch_v545.py'
 if ($LASTEXITCODE -ne 0) { throw '5.4.5 source patch failed.' }
 
-Write-Host '=== Apply 5.4.7 Pack Manager keybind integration ==='
-Copy-Item 'bestiary-v547/ContentScreen.tsx' 'source/src/renderer/src/components/ContentScreen.tsx' -Force
+Write-Host '=== Apply 5.4.6 Pack Manager keybind integration ==='
+Copy-Item 'bestiary-v546/ContentScreen.tsx' 'source/src/renderer/src/components/ContentScreen.tsx' -Force
 
 $panel = Get-Content 'source/src/renderer/src/components/KeybindPanel.tsx' -Raw
 if ($panel -notmatch "import './UxPanels.css';") {
@@ -208,19 +208,23 @@ if ($css -notmatch 'content-keybind-host') {
 Set-Content $cssPath $css -Encoding UTF8
 
 $appPath = 'source/src/renderer/src/App.tsx'
-$appSource = (Get-Content $appPath -Raw).Replace("currentVersion: '5.4.5'", "currentVersion: '5.4.7'")
-if ($appSource -notmatch "currentVersion: '5\.4\.6'") { throw 'Unable to bump App version to 5.4.7.' }
+$appSource = (Get-Content $appPath -Raw).Replace("currentVersion: '5.4.5'", "currentVersion: '5.4.6'")
+if ($appSource -notmatch "currentVersion: '5\.4\.7'") { throw 'Unable to bump App version to 5.4.6.' }
 Set-Content $appPath $appSource -Encoding UTF8
 
 $homePath = 'source/src/renderer/src/components/Home.tsx'
-$homeSource = (Get-Content $homePath -Raw).Replace('5.4.5', '5.4.7')
+$homeSource = (Get-Content $homePath -Raw).Replace('5.4.5', '5.4.6')
 Set-Content $homePath $homeSource -Encoding UTF8
 
 foreach ($rel in @('source/src/main/core/AccountService.ts','source/src/main/core/RemoteService.ts')) {
-  $text = (Get-Content $rel -Raw).Replace('BestiaryLauncher/5.4.5', 'BestiaryLauncher/5.4.7')
-  if ($text -notmatch 'BestiaryLauncher/5\.4\.6') { throw "Unable to bump $rel to 5.4.7." }
+  $text = (Get-Content $rel -Raw).Replace('BestiaryLauncher/5.4.5', 'BestiaryLauncher/5.4.6')
+  if ($text -notmatch 'BestiaryLauncher/5\.4\.6') { throw "Unable to bump $rel to 5.4.6." }
   Set-Content $rel $text -Encoding UTF8
 }
+
+Write-Host '=== Apply 5.4.7 startup auto-update ==='
+python 'bestiary-v547/patch_v547.py'
+if ($LASTEXITCODE -ne 0) { throw '5.4.7 startup auto-update patch failed.' }
 
 Push-Location source
 npm install --no-audit --no-fund
@@ -240,9 +244,6 @@ npm run dist:win
 if ($LASTEXITCODE -ne 0) { throw 'Launcher 5.4.7 Windows build failed.' }
 Pop-Location
 
-python 'bestiary-v547/patch_v547.py'
-if ($LASTEXITCODE -ne 0) { throw '5.4.7 startup auto-update patch failed.' }
-
 Write-Host '=== Verify 5.4.7 auto-update contracts ==='
 $main = Get-Content 'source/src/main/index.ts' -Raw
 $ipc = Get-Content 'source/src/shared/ipc.ts' -Raw
@@ -256,6 +257,7 @@ $generator = Get-Content 'source/src/main/core/JvmProfileGenerator.ts' -Raw
 if ($appSource -notmatch "currentVersion: '5\.4\.6'") { throw '5.4.7 version metadata missing.' }
 if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM profile contract regressed.' }
 if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 3072') { throw '3 GB minimum client heap regressed.' }
+if ($main -notmatch 'BESTIARY_LAUNCHER_STARTUP_AUTO_UPDATE_V547' -or $main -notmatch 'appUpdater\?\.checkAndDownload\(\)') { throw 'Launcher startup auto-update contract missing.' }
 
 if ($main -notmatch "event\.type === 'state' && event\.state === 'running'" -or $main -notmatch 'mainWindow\.hide\(\)') { throw '5.4.5 auto-hide contract regressed.' }
 if ($main -notmatch "event\.type === 'state' && event\.state === 'stopped'" -or $main -notmatch 'restoreBestiaryWindow\(\);') { throw '5.4.5 restore contract regressed.' }
@@ -274,10 +276,10 @@ if ($keybindService -notmatch "mode === 'locked'" -or $keybindService -notmatch 
 $installer = Get-Item 'source/release/BestiaryLauncher-Setup-5.4.7.exe' -ErrorAction Stop
 $unpacked = Resolve-Path 'source/release/win-unpacked'
 $exe = Get-Item (Join-Path $unpacked 'Bestiary Launcher.exe') -ErrorAction Stop
-if ($installer.Length -lt 1000000 -or $exe.Length -lt 1000000) { throw 'Launcher 5.4.7 binary unexpectedly small.' }
-if (-not (Test-Path (Join-Path $unpacked 'resources/app.asar'))) { throw 'Launcher 5.4.7 runtime is missing app.asar.' }
+if ($installer.Length -lt 1000000 -or $exe.Length -lt 1000000) { throw 'Launcher 5.4.6 binary unexpectedly small.' }
+if (-not (Test-Path (Join-Path $unpacked 'resources/app.asar'))) { throw 'Launcher 5.4.6 runtime is missing app.asar.' }
 
-Write-Host '=== Smoke Launcher 5.4.7 binary ==='
+Write-Host '=== Smoke Launcher 5.4.6 binary ==='
 $stdoutPath = "$PWD/runtime-smoke-v547-stdout.log"
 $stderrPath = "$PWD/runtime-smoke-v547-stderr.log"
 Remove-Item $stdoutPath,$stderrPath -Force -ErrorAction SilentlyContinue
@@ -287,7 +289,7 @@ Start-Sleep -Seconds 10
 if ($proc.HasExited) {
   if (Test-Path $stdoutPath) { Get-Content $stdoutPath -Tail 120 }
   if (Test-Path $stderrPath) { Get-Content $stderrPath -Tail 120 }
-  throw "Launcher 5.4.7 exited during smoke test with code $($proc.ExitCode)."
+  throw "Launcher 5.4.6 exited during smoke test with code $($proc.ExitCode)."
 }
 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
@@ -297,7 +299,7 @@ Remove-Item 'build-output-v547' -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force 'build-output-v547/diagnostic-source' | Out-Null
 Copy-Item $installer.FullName 'build-output-v547/BestiaryLauncher-Setup-5.4.7.exe' -Force
 $hash = (Get-FileHash 'build-output-v547/BestiaryLauncher-Setup-5.4.7.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
-"$hash  BestiaryLauncher-Setup-5.4.7.exe" | Set-Content 'build-output-v547/BestiaryLauncher-Setup-5.4.7-SHA256.txt' -Encoding ascii
+"$hash  BestiaryLauncher-Setup-5.4.7.exe" | Set-Content 'build-output-v547/BestiaryLauncher-Setup-5.4.6-SHA256.txt' -Encoding ascii
 Copy-Item $stdoutPath 'build-output-v547/runtime-smoke-stdout.log' -Force -ErrorAction SilentlyContinue
 Copy-Item $stderrPath 'build-output-v547/runtime-smoke-stderr.log' -Force -ErrorAction SilentlyContinue
 Copy-Item 'source/src/renderer/src/components/ContentScreen.tsx' 'build-output-v547/diagnostic-source/ContentScreen.tsx' -Force
@@ -306,6 +308,7 @@ Copy-Item 'source/src/main/core/KeybindSettingsService.ts' 'build-output-v547/di
 
 @"
 version=5.4.7
+startupAutoUpdate=true
 sha256=$hash
 baseJvmProfileRevision=544
 minimumClientHeapMb=3072
