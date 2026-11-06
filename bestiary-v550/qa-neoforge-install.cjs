@@ -15,6 +15,7 @@ function findCompiled(filename) {
 const { LoaderCatalog } = require(findCompiled('LoaderCatalog.js'));
 const { PersonalRuntimeInstaller } = require(findCompiled('PersonalRuntimeInstaller.js'));
 const { MinecraftLauncher } = require(findCompiled('Launcher.js'));
+const { withLoaderJvmArgs } = require(findCompiled('PersonalJvmArgs.js'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 (async () => {
@@ -66,6 +67,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         javaPath: java,
         minecraftVersion: '1.21.1',
         customVersionId: id,
+        extraJvmArgs: withLoaderJvmArgs('neoforge', []),
         memory: { minMb: 1024, maxMb: 3072 },
         window: { width: 1024, height: 768, fullscreen: false },
         timeoutMs: 480_000,

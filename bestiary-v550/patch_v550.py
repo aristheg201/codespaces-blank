@@ -14,6 +14,7 @@ def replace_one(path, old, new):
 for rel, source in [
     ('src/main/core/LoaderCatalog.ts', 'bestiary-v550/LoaderCatalog.ts'),
     ('src/main/core/PersonalRuntimeInstaller.ts', 'bestiary-v550/PersonalRuntimeInstaller.ts'),
+    ('src/main/core/PersonalJvmArgs.ts', 'bestiary-v550/PersonalJvmArgs.ts'),
     ('src/main/core/ContentManager.ts', 'bestiary-v550/ContentManager.ts'),
     ('src/main/core/ModpackManager.ts', 'bestiary-v550/ModpackManager.ts'),
     ('src/renderer/src/components/CreateModpackDialog.tsx', 'bestiary-v550/CreateModpackDialog.tsx'),
@@ -76,7 +77,8 @@ replace_one('src/preload/index.ts',
 
 replace_one('src/main/index.ts',
 "import { ModpackManager } from './core/ModpackManager';",
-"import { ModpackManager } from './core/ModpackManager';\nimport { LoaderCatalog, validateModpackSelection } from './core/LoaderCatalog';\nimport { PersonalRuntimeInstaller } from './core/PersonalRuntimeInstaller';")
+"import { ModpackManager } from './core/ModpackManager';\nimport { LoaderCatalog, validateModpackSelection } from './core/LoaderCatalog';\nimport { PersonalRuntimeInstaller } from './core/PersonalRuntimeInstaller';
+import { withLoaderJvmArgs } from './core/PersonalJvmArgs';")
 
 replace_one('src/main/index.ts',
 "  ipcMain.handle('bestiary:modpacks-create', (_event, name: string) => modpackManager.create(name));",
@@ -139,7 +141,7 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
       fabricLoader: pack.loader === 'fabric' ? pack.loaderVersion || undefined : undefined,
       memory: { minMb: settings.minRamMb, maxMb: settings.maxRamMb },
       window: { width: settings.width, height: settings.height, fullscreen: settings.fullscreen },
-      extraJvmArgs: settings.generatedJvmArgs,
+      extraJvmArgs: withLoaderJvmArgs(pack.loader, settings.generatedJvmArgs),
       timeoutMs: 120_000,
     });
     sendProgress({ stage: 'running', percent: 100, title: 'Minecraft đang chạy',
@@ -170,6 +172,13 @@ jre_text, java_type_changes = re.subn(
 if java_type_changes != 1:
     raise SystemExit('Could not extend JreManager runtime type to Java 25.')
 jre_file.write_text(jre_text, encoding='utf-8')
+
+replace_one('src/main/core/Launcher.ts',
+  "  private jvmArgumentKey(argument: string): string {",
+  """  private jvmArgumentKey(argument: string): string {
+    if (/^--add-(?:opens|exports)=/u.test(argument)) {
+      return argument.slice(0, argument.lastIndexOf('='));
+    }""")
 
 replace_one('src/renderer/src/App.tsx', "currentVersion: '5.4.9'", "currentVersion: '5.5.0'")
 home = root / 'src/renderer/src/components/Home.tsx'
