@@ -136,10 +136,10 @@ def home_patch(s):
     s = replace_once(s, marker, marker + '\n  onModpacks: () => void;')
     marker = 'onLibrary, onAccount, account,'
     s = replace_once(s, marker, 'onLibrary, onModpacks, onAccount, account,')
-    marker = '<button className="bestiary-library-link" onClick={onLibrary}>'
+    marker = '<button className="bestiary-mod-manager" onClick={onLibrary}>'
     if marker not in s:
         raise SystemExit('Could not find Home Library button')
-    s = replace_once(s, marker, '<button onClick={onModpacks}><b>▦</b><span><strong>My Modpacks</strong><small>Tạo, import, quản lý profile cá nhân</small></span></button>\n          ' + marker)
+    s = replace_once(s, marker, '<button className="bestiary-mod-manager" onClick={onModpacks}><span className="mod-manager-icon">▦</span><span className="mod-manager-copy"><strong>MY MODPACKS</strong><small>Tạo, import, quản lý profile cá nhân</small></span><span className="mod-manager-cta">QUẢN LÝ →</span></button>\n        ' + marker)
     s = s.replace('5.4.7', '5.4.8')
     return s
 edit('src/renderer/src/components/Home.tsx', home_patch)
