@@ -33,8 +33,10 @@ jobs:
           set -euo pipefail
           passed=0
           for attempt in $(seq 1 75); do
-            state="$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha -q '[.status,.conclusion,.headSha] | @tsv')"
-            IFS=$'\t' read -r status conclusion head_sha <<< "$state"
+            state="$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha)"
+            status="$(echo "$state" | jq -r .status)"
+            conclusion="$(echo "$state" | jq -r '.conclusion // ""')"
+            head_sha="$(echo "$state" | jq -r .headSha)"
             if [[ "$head_sha" != "$EXPECTED_HEAD_SHA" ]]; then
               echo "Refusing release: QA run SHA mismatch" >&2
               exit 1
