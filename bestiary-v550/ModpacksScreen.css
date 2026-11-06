@@ -1,0 +1,58 @@
+.modpacks-screen{height:100vh;box-sizing:border-box;overflow:auto;background:#0a0d12;color:#edf2fb;padding:28px;font-family:inherit}
+.modpacks-screen button{cursor:pointer;border:1px solid #344052;border-radius:10px;padding:10px 14px;background:#192230;color:#e5edfa;font:inherit}
+.modpacks-screen button:disabled{opacity:.45;cursor:wait}
+.modpacks-screen button:hover:not(:disabled){border-color:#7e9ec9}
+.modpacks-screen .primary{background:#327ad0;border-color:#327ad0;color:white;font-weight:700}
+.modpacks-top,.modpacks-heading{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.modpacks-top p,.modpacks-heading small{font-size:11px;color:#7da9ec;letter-spacing:1.7px;font-weight:700}
+.modpacks-top h1{font-size:30px;margin:6px 0}.modpacks-top small{color:#96a4b8}
+.modpacks-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.modpacks-columns{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;margin-top:25px;min-height:400px}
+.modpacks-sidebar,.modpacks-main{background:#111821;border:1px solid #253346;border-radius:16px;padding:20px;min-width:0}
+.modpacks-sidebar h3{font-size:12px;letter-spacing:1px;color:#9ba9be}
+.modpacks-server,.modpacks-choice{width:100%;box-sizing:border-box;text-align:left;display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.modpacks-server{padding:12px;background:#172438;border:1px solid #324562;border-radius:10px}
+.modpacks-server small,.modpacks-choice small{color:#94a7bc;font-size:11px}
+.modpacks-choice.active,.modpacks-tabs button.active{background:#213c65;border-color:#4c82c3}
+.modpacks-heading h2{font-size:23px;margin:8px 0}.modpacks-heading p{color:#97a4b7;margin:0}
+.modpacks-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:25px;padding-bottom:15px;border-bottom:1px solid #2a3445}
+.modpacks-tabs button.primary{margin-left:auto}
+.modpacks-files{max-height:56vh;overflow:auto}
+.modpacks-file{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:15px 4px;border-bottom:1px solid #263242}
+.modpacks-file div:first-child{min-width:0;display:flex;flex-direction:column;gap:5px}
+.modpacks-file strong{word-break:break-word}.modpacks-file small{color:#96a4b8}
+.modpacks-file-actions{display:flex;gap:8px;flex-wrap:wrap}
+.modpacks-empty{padding:50px 15px;text-align:center;color:#a6b4c6}
+.modpacks-error{white-space:pre-wrap;background:#42232a;color:#ffc9c9;padding:12px;border-radius:10px}
+.modpacks-message{background:#1b3a31;color:#b5f0d3;padding:12px;border-radius:10px}
+.modpacks-note{color:#8d9cb0;font-size:12px;padding-top:20px;line-height:1.6}
+@media(max-width:850px){.modpacks-columns{grid-template-columns:1fr}.modpacks-top,.modpacks-heading{align-items:flex-start;flex-direction:column}}
+
+/* Electron-compatible dialogs: all actions remain in the React renderer. */
+.modpacks-dialog-backdrop{position:fixed;inset:0;z-index:200;background:rgba(1,6,14,.82);display:grid;place-items:center;padding:20px;box-sizing:border-box}
+.modpacks-dialog{width:min(100%,480px);max-height:calc(100vh - 40px);overflow:auto;background:#131d2b;border:1px solid #425a79;box-shadow:0 25px 75px rgba(0,0,0,.7);border-radius:18px;padding:24px;box-sizing:border-box;color:#edf2fb}
+.modpacks-dialog h2{margin:0 0 24px;font-size:24px}
+.modpacks-dialog p{color:#c6d4e6;line-height:1.6}
+.modpacks-field{display:flex;flex-direction:column;gap:9px}
+.modpacks-field span{font-weight:700;letter-spacing:1px;font-size:12px;color:#a4c5f2}
+.modpacks-field input{border:1px solid #536d91;border-radius:10px;background:#09121f;color:white;font:inherit;font-size:16px;padding:12px;min-width:0}
+.modpacks-field input:focus-visible{outline:2px solid #78adff;outline-offset:2px}
+.modpacks-field small{color:#8a9fbb}
+.modpacks-checkbox{display:flex;align-items:center;gap:12px;margin:18px 0;font-size:13px;cursor:pointer}
+.modpacks-checkbox input{width:20px;height:20px;accent-color:#4e94e8}
+.modpacks-dialog-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:28px;flex-wrap:wrap}
+.modpacks-dialog-actions button{min-width:125px}
+.modpacks-screen .modpacks-dialog-actions button.danger{border-color:#dd4b50;background:#ab282f;color:#fff;font-weight:800}
+.modpacks-danger-text{border-left:3px solid #e95656;padding-left:12px;white-space:normal}
+@media(max-width:540px){.modpacks-dialog-actions button{flex:1}}
+
+.modpacks-create-dialog{max-width:520px}
+.modpacks-create-dialog form{display:flex;flex-direction:column;gap:14px}
+.modpacks-create-dialog h2{margin:0 0 4px}
+.modpacks-create-dialog p{margin:0;color:#9db0c5;line-height:1.45;font-size:13px}
+.modpacks-create-dialog .modpacks-field select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #536d91;background:#09121f;color:white;font:inherit;font-size:14px}
+.modpacks-create-dialog .modpacks-field select:disabled{opacity:.58;cursor:not-allowed}
+.modpacks-create-dialog .modpacks-field select:focus-visible{outline:2px solid #78adff;outline-offset:2px}
+.modpacks-create-dialog .modpacks-field{gap:6px}
+.modpacks-create-dialog .modpacks-create-note{color:#8a9fbb;line-height:1.5}
+.modpacks-create-dialog .modpacks-create-error{border-left:3px solid #df5a59;padding-left:12px;color:#ffd1d1;font-size:12px}
