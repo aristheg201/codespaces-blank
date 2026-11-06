@@ -1,0 +1,95 @@
+name: Publish verified Bestiary Launcher 5.5.0 NeoForge build
+
+on:
+  push:
+    branches:
+      - feature/bestiary-launcher-multiloader-v550
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v550.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: bestiary-v550-publish
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '42258519832'
+      EXPECTED_HEAD_SHA: '358ec68f7f3e3bee28c63b81eb467e1bff6a183b'
+      TAG: launcher-v5.5.0
+      EXE: BestiaryLauncher-Setup-5.5.0.exe
+    steps:
+      - name: Wait until the exact NeoForge Java launch QA run passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          passed=0
+          for attempt in $(seq 1 75); do
+            state="$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha -q '[.status,.conclusion,.headSha] | @tsv')"
+            IFS=$'\t' read -r status conclusion head_sha <<< "$state"
+            if [[ "$head_sha" != "$EXPECTED_HEAD_SHA" ]]; then
+              echo "Refusing release: QA run SHA mismatch" >&2
+              exit 1
+            fi
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" != "success" ]]; then
+                echo "Refusing release: NeoForge game launch QA finished $conclusion" >&2
+                exit 1
+              fi
+              passed=1
+              break
+            fi
+            sleep 12
+          done
+          test "$passed" -eq 1
+
+      - name: Download and validate QA-approved Windows artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name BestiaryLauncher-Windows-5.5.0-CANDIDATE --dir publish
+          test "$(stat -c %s "publish/$EXE")" -gt 80000000
+          expected="$(tr -d '\r' < publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt | awk '{print tolower($1)}')"
+          actual="$(sha256sum "publish/$EXE" | awk '{print $1}')"
+          test "${#expected}" -eq 64
+          test "$actual" = "$expected"
+          tr -d '\r' < publish/qa-create-v550.log | grep -F 'QA PASS: NeoForge Create -> selected metadata -> Rename -> Delete'
+          tr -d '\r' < publish/qa-neoforge-install-v550.log | grep -F 'QA PASS: Real NeoForge 1.21.1'
+          tr -d '\r' < publish/qa-neoforge-install-v550.log | grep -F 'QA PASS: NeoForge Minecraft Java process started and remained alive'
+          tr -d '\r' < publish/feature-contract.txt | grep -Fx 'neoForgeRealInstallerE2E=true'
+          echo "VERIFIED_SHA256=$actual" >> "$GITHUB_ENV"
+          echo "VERIFIED_SIZE=$(stat -c %s "publish/$EXE")" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release and verify public installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release tag already exists; refusing to overwrite." >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            "publish/$EXE" \
+            publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$EXPECTED_HEAD_SHA" \
+            --title "Bestiary Launcher 5.5.0 - Minecraft versions and NeoForge modpacks" \
+            --notes "Create isolated modpacks with selectable Minecraft version, Fabric/Forge/NeoForge/Quilt/Vanilla and exact compatible loader version. NeoForge 1.21.1 verified through official installer and 15-second real Java-process launch smoke test. Keeps SVFrame Official Full/Lite separate. Windows Electron Create/Rename/Delete UI QA passed. This verifies the launcher startup path, not world creation or compatibility of every third-party mod. CurseForge remote API downloads remain future work." \
+            --latest
+          public_asset="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name == "BestiaryLauncher-Setup-5.5.0.exe")')"
+          digest="$(echo "$public_asset" | jq -r .digest)"
+          size="$(echo "$public_asset" | jq -r .size)"
+          test "$digest" = "sha256:$VERIFIED_SHA256"
+          test "$size" = "$VERIFIED_SIZE"
+          echo "RELEASE_OK_SHA256=$VERIFIED_SHA256"
+          echo "RELEASE_OK_SIZE=$VERIFIED_SIZE"
