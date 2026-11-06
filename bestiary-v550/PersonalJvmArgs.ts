@@ -53,11 +53,11 @@ export async function withLoaderJvmArgs(
     if (item === '-p' || item === '--module-path') {
       const raw = original[++i];
       if (typeof raw !== 'string') throw new Error('NeoForge module-path không hợp lệ.');
-      const paths = expand(raw).split(path.delimiter);
-      if (!paths.length || paths.some((part) => part.length === 0)) {
+      const moduleEntries = expand(raw).split(path.delimiter);
+      if (!moduleEntries.length || moduleEntries.some((part) => part.length === 0)) {
         throw new Error('NeoForge module-path trống hoặc không hợp lệ.');
       }
-      for (const entry of paths) {
+      for (const entry of moduleEntries) {
         const fullPath = path.resolve(entry);
         const relative = path.relative(libraryDirectory, fullPath);
         if (relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -67,7 +67,7 @@ export async function withLoaderJvmArgs(
           throw new Error('Thiếu thư viện NeoForge bắt buộc: ' + relative);
         }
       }
-      argumentsToAdd.push('--module-path=' + paths.join(path.delimiter));
+      argumentsToAdd.push('--module-path=' + moduleEntries.join(path.delimiter));
       foundModulePath = true;
       continue;
     }
