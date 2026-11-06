@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$GH_TOKEN" ]]; then
-            echo "::error::Configure the repository Actions secret BESTIARY_RELEASE_PAT. Use a fine-grained GitHub PAT covering BOTH codespaces-blank and bestiary-distribution with Contents: Read and Write and Actions: Read. Never paste tokens into chat or logs."
+            echo "::error::Configure the repository Actions secret BESTIARY_RELEASE_PAT. Use a fine-grained GitHub PAT for BOTH codespaces-blank and bestiary-distribution with Repository permissions: Contents Read and Write, Workflows Write, Actions Read. Never paste tokens into chat or logs."
             exit 1
           fi
 
