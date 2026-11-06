@@ -23,7 +23,7 @@ jobs:
           over_data=base64.b64decode(''.join((pathlib.Path('bestiary-v510/overlay')/p).read_text().strip() for p in overlay_names))
           names=['src/main/core/Launcher.ts','src/main/core/JreManager.ts','src/main/index.ts','src/main/core/FabricInstaller.ts']
           sources={}
-          for label,data in [('base',base_data),('overlay',over_data)]:
+          for label,data in [('base',base_data)]:
             with tarfile.open(fileobj=io.BytesIO(gzip.decompress(data) if label=='base' else zlib.decompressobj(16+zlib.MAX_WBITS).decompress(data)),mode='r:') as archive:
               available={item.name:item for item in archive if item.isfile()}
               for name in names:
