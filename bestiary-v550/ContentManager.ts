@@ -230,13 +230,13 @@ export class ContentManager {
       const match = /\[\[mods\]\]([\s\S]*?)(?=\[\[mods\]\]|$)/u.exec(raw);
       if (!match) return null;
       const body = match[1];
-      const value = (key: string) => {
-        const expression = new RegExp('^\\s*' + key + '\\s*=\\s*["\\']([^"\\']+)["\\']', 'mu');
-        return expression.exec(body)?.[1]?.trim() || '';
-      };
-      const id = value('modId');
+      const fields = new Map<string, string>();
+      for (const part of body.matchAll(/^\s*(modId|displayName|version)\s*=\s*"([^"\r\n]+)"/gmu)) {
+        fields.set(part[1], part[2].trim());
+      }
+      const id = fields.get('modId') ?? '';
       if (!id) return null;
-      return { id, name: value('displayName') || id, version: value('version') };
+      return { id, name: fields.get('displayName') || id, version: fields.get('version') || '' };
     } catch {
       return null;
     }
