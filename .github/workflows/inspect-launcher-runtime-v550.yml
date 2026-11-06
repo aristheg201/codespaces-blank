@@ -16,7 +16,7 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import io, tarfile, base64, gzip, pathlib
+          import io, tarfile, base64, gzip, zlib, pathlib
           base_names=['src5-00','src5-01','src5-02','src5-03a','src5-03b','src5-04','src5-05']
           base_data=base64.b64decode(''.join((pathlib.Path('bestiary-build')/p).read_text().strip() for p in base_names))
           overlay_names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
@@ -24,7 +24,7 @@ jobs:
           names=['src/main/core/Launcher.ts','src/main/core/JreManager.ts','src/main/index.ts','src/main/core/FabricInstaller.ts']
           sources={}
           for label,data in [('base',base_data),('overlay',over_data)]:
-            with tarfile.open(fileobj=io.BytesIO(gzip.decompress(data)),mode='r:') as archive:
+            with tarfile.open(fileobj=io.BytesIO(gzip.decompress(data) if label=='base' else zlib.decompressobj(16+zlib.MAX_WBITS).decompress(data)),mode='r:') as archive:
               available={item.name:item for item in archive if item.isfile()}
               for name in names:
                 if name in available:
