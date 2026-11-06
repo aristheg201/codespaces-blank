@@ -2,9 +2,9 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'fs-extra';
 import AdmZip from 'adm-zip';
-import type { LibraryImportResult, LibrarySnapshot, ModpackInfo } from '../../shared/ipc';
+import type { LibraryImportResult, LibrarySnapshot, ModpackInfo, ModpackSelection } from '../../shared/ipc';
 import { ContentManager } from './ContentManager';
-import { LoaderCatalog, validateModpackSelection, type ModpackSelection } from './LoaderCatalog';
+import { LoaderCatalog, validateModpackSelection } from './LoaderCatalog';
 
 const INSTANCE_VERSION = '1.21.1';
 const FABRIC_LOADER = '0.18.4';
