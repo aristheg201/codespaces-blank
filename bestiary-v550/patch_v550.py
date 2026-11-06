@@ -152,7 +152,7 @@ replace_one('src/main/index.ts', 'async function accountSnapshot() {', new_funct
 
 jre_path = root / 'src/main/core/JreManager.ts'
 jre = jre_path.read_text(encoding='utf-8')
-pat = r'(getRequiredJavaVersion\\(minecraftVersion: string\\): number \\{\\s*const parsed = parseMinecraftVersion\\(minecraftVersion\\);)([\\s\\S]*?)(\\n  \\})'
+pat = r'(getRequiredJavaVersion\(minecraftVersion: string\): number \{\s*const parsed = parseMinecraftVersion\(minecraftVersion\);)([\s\S]*?)(\n  \})'
 m = re.search(pat, jre)
 if not m:
     raise SystemExit('Unable to find exact JreManager.getRequiredJavaVersion implementation.')
