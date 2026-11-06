@@ -14,6 +14,8 @@ function findCompiled(filename) {
 }
 const { LoaderCatalog } = require(findCompiled('LoaderCatalog.js'));
 const { PersonalRuntimeInstaller } = require(findCompiled('PersonalRuntimeInstaller.js'));
+const { MinecraftLauncher } = require(findCompiled('Launcher.js'));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 (async () => {
   const versions = await LoaderCatalog.loaderVersions('1.21.1', 'neoforge');
@@ -40,6 +42,51 @@ const { PersonalRuntimeInstaller } = require(findCompiled('PersonalRuntimeInstal
       throw new Error('Profile does not correspond to NeoForge ' + ver + ': ' + id);
     }
     console.log('QA PASS: Real NeoForge 1.21.1 ' + ver + ' installed in isolated profile ' + id);
+
+    console.log('=== NeoForge Minecraft 1.21.1 actual Java launch smoke test ===');
+    const launcher = new MinecraftLauncher();
+    const recent = [];
+    const detach = launcher.onEvent((event) => {
+      if (event.type === 'stderr' || event.type === 'stdout' || event.type === 'debug' || event.type === 'error' || event.type === 'state') {
+        const message = event.message || event.state || '';
+        const value = String(message).slice(-500);
+        recent.push(event.type + ': ' + value);
+        if (recent.length > 150) recent.shift();
+        if (/error|failed|Launching target|modlauncher|neoforge|java version/i.test(value)) {
+          console.log('Minecraft:', event.type, value.slice(-230));
+        }
+      }
+    });
+    try {
+      // Execute the same MinecraftLauncher core that the personal Play button uses.
+      // The CI machine has no Minecraft account; offline mode is the supported smoke path.
+      const started = await launcher.launch({
+        username: 'NeoForgeQA550',
+        gameDirectory: home,
+        javaPath: java,
+        minecraftVersion: '1.21.1',
+        customVersionId: id,
+        memory: { minMb: 1024, maxMb: 3072 },
+        window: { width: 1024, height: 768, fullscreen: false },
+        timeoutMs: 480_000,
+      });
+      if (!started.pid || started.versionId !== id) {
+        throw new Error('MinecraftLauncher did not spawn the selected NeoForge profile: ' + JSON.stringify(started));
+      }
+      console.log('Minecraft Java process created PID=' + started.pid + ' version=' + started.versionId);
+      await sleep(15000);
+      if (!launcher.isRunning()) {
+        throw new Error('NeoForge Minecraft process exited within 15 seconds. Logs: ' + recent.slice(-25).join(' | '));
+      }
+      console.log('QA PASS: NeoForge Minecraft Java process started and remained alive using version ' + id);
+    } catch (error) {
+      console.error('QA NeoForge Launch failure logs: ' + recent.slice(-55).join('\\n'));
+      throw error;
+    } finally {
+      await launcher.stop().catch((error) => console.error('QA stop warning:', error));
+      detach();
+    }
+
   } finally {
     await fs.promises.rm(home, { recursive: true, force: true, maxRetries: 4, retryDelay: 200 })
       .catch((error) => console.error('QA tmp cleanup warning:', error));
