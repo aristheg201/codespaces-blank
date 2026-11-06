@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { _electron: electron } = require('playwright-core');
+const { _electron: electron } = require(path.resolve(__dirname, '../source/node_modules/playwright-core'));
 
 const exe = path.resolve(__dirname, '../source/release/win-unpacked/Bestiary Launcher.exe');
 if (!fs.existsSync(exe)) throw new Error('Packaged Electron EXE does not exist: ' + exe);
