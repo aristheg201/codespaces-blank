@@ -127,6 +127,7 @@ def app_patch(s):
     s = replace_once(s, marker, "  if (screen === 'modpacks') return <><ModpacksScreen onBack={() => setScreen('home')} />{update.status === 'ready' && <UpdateBar state={update} />}</>;\n" + marker)
     marker = "onLibrary={() => setScreen('content')} onAccount="
     s = replace_once(s, marker, "onLibrary={() => setScreen('content')} onModpacks={() => setScreen('modpacks')} onAccount=")
+    s = replace_once(s, "currentVersion: '5.4.7'", "currentVersion: '5.4.8'")
     return s
 edit('src/renderer/src/App.tsx', app_patch)
 
@@ -139,6 +140,11 @@ def home_patch(s):
     if marker not in s:
         raise SystemExit('Could not find Home Library button')
     s = replace_once(s, marker, '<button onClick={onModpacks}><b>▦</b><span><strong>My Modpacks</strong><small>Tạo, import, quản lý profile cá nhân</small></span></button>\n          ' + marker)
+    s = s.replace('5.4.7', '5.4.8')
     return s
 edit('src/renderer/src/components/Home.tsx', home_patch)
+for rel in ('src/main/core/RemoteService.ts', 'src/main/core/AccountService.ts'):
+    target = root / rel
+    text = target.read_text(encoding='utf-8').replace('BestiaryLauncher/5.4.7', 'BestiaryLauncher/5.4.8')
+    target.write_text(text, encoding='utf-8')
 print('Applied 5.4.8 Modpack Manager backend/UI IPC patch.')
