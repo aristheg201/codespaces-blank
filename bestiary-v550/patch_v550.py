@@ -162,7 +162,7 @@ replace_one('src/main/index.ts', 'async function accountSnapshot() {', new_funct
 jre_file = root / 'src/main/core/JreManager.ts'
 jre_text = jre_file.read_text(encoding='utf-8')
 jre_text, java_type_changes = re.subn(
-    r'(type JavaMajorVersion\\s*=\\s*[^;\\n]+)(;)',
+    r'(type JavaMajorVersion\s*=\s*[^;\n]+)(;)',
     lambda m: (m.group(1) if '25' in m.group(1) else m.group(1) + ' | 25') + m.group(2),
     jre_text,
     count=1,
