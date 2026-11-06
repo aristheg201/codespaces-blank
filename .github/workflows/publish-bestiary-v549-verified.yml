@@ -31,8 +31,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          metadata="$(gh run view "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha -q '[.conclusion,.headSha] | @tsv')"
-          test "$metadata" = "$(printf 'success\t%s' "$VERIFIED_COMMIT")"
+          metadata="$(gh run view "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" --json headSha,jobs -q '[.headSha, (.jobs[] | select(.name == "build-windows") | .conclusion)] | @tsv')"
+          test "$metadata" = "$(printf '%s\tsuccess' "$VERIFIED_COMMIT")"
           mkdir -p publish
           gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
             --name BestiaryLauncher-Windows-5.4.9-VERIFIED --dir publish
