@@ -1,0 +1,138 @@
+name: Build Bestiary Launcher 5.0.1
+
+on:
+  push:
+    branches:
+      - bestiary-launcher-v5-syncfix
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reconstruct source and assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force source | Out-Null
+
+          $sourcePartNames = @(
+            "src5-00", "src5-01", "src5-02", "src5-03a", "src5-03b", "src5-04", "src5-05"
+          )
+          $sourceB64 = ($sourcePartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          [IO.File]::WriteAllBytes("$PWD/source.tar.gz", [Convert]::FromBase64String($sourceB64))
+          tar -xzf "$PWD/source.tar.gz" -C "$PWD/source"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract source archive" }
+          Copy-Item "bestiary-build/RemoteService.ts" "$PWD/source/src/main/core/RemoteService.ts" -Force
+          Copy-Item "bestiary-build/electron-builder.json" "$PWD/source/electron-builder.json" -Force
+          Copy-Item "bestiary-build/installer.nsh" "$PWD/source/build/installer.nsh" -Force
+
+          $logoPartNames = @(
+            "logo5-00a", "logo5-00b", "logo5-01a", "logo5-01b", "logo5-02", "logo5-03", "logo5-04a", "logo5-04b"
+          )
+          $logoB64 = ($logoPartNames | ForEach-Object { (Get-Content "bestiary-build/$_" -Raw).Trim() }) -join ""
+          New-Item -ItemType Directory -Force "$PWD/source/resources" | Out-Null
+          New-Item -ItemType Directory -Force "$PWD/source/src/renderer/public" | Out-Null
+          [IO.File]::WriteAllBytes("$PWD/source/resources/logo.png", [Convert]::FromBase64String($logoB64))
+          Copy-Item "$PWD/source/resources/logo.png" "$PWD/source/src/renderer/public/logo.png" -Force
+
+          Push-Location source
+          npm pkg set version=5.0.1
+          Pop-Location
+
+      - name: Generate Windows icon
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          @'
+          from PIL import Image
+          from pathlib import Path
+
+          root = Path("source")
+          src = Image.open(root / "resources" / "logo.png").convert("RGBA")
+          canvas = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+          src.thumbnail((230, 150), Image.Resampling.LANCZOS)
+          x = (256 - src.width) // 2
+          y = (256 - src.height) // 2
+          canvas.alpha_composite(src, (x, y))
+          (root / "build").mkdir(parents=True, exist_ok=True)
+          canvas.save(root / "resources" / "icon.png")
+          canvas.save(
+              root / "build" / "icon.ico",
+              format="ICO",
+              sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(24,24),(16,16)],
+          )
+          '@ | Set-Content -Encoding UTF8 create_icon.py
+          python create_icon.py
+
+      - name: Install dependencies
+        working-directory: source
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: source
+        shell: pwsh
+        run: npm run typecheck
+
+      - name: Build NSIS installer
+        working-directory: source
+        shell: pwsh
+        run: npm run dist:win
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-ChildItem "$PWD/source/release" -Filter "BestiaryLauncher-Setup-5.0.1.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Installer not produced" }
+          if ($installer.Length -lt 1000000) { throw "Installer is unexpectedly small: $($installer.Length)" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          New-Item -ItemType Directory -Force "$PWD/build-output" | Out-Null
+          Copy-Item $installer.FullName "$PWD/build-output/BestiaryLauncher-Setup-5.0.1.exe" -Force
+          "$hash  BestiaryLauncher-Setup-5.0.1.exe" | Set-Content -Encoding ascii "$PWD/build-output/BestiaryLauncher-Setup-5.0.1-SHA256.txt"
+
+      - name: Smoke-test NSIS silent install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = "$PWD/build-output/BestiaryLauncher-Setup-5.0.1.exe"
+          $proc = Start-Process -FilePath $installer -ArgumentList "/S" -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
+          Start-Sleep -Seconds 2
+          $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Launcher.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installed) { throw "Installed Bestiary Launcher executable was not found under LOCALAPPDATA Programs" }
+          if ($installed.Length -lt 1000000) { throw "Installed launcher executable is unexpectedly small" }
+
+      - name: Upload verified installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.0.1
+          path: |
+            build-output/BestiaryLauncher-Setup-5.0.1.exe
+            build-output/BestiaryLauncher-Setup-5.0.1-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
