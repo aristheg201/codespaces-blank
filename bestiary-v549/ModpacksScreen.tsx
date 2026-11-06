@@ -164,6 +164,7 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
   }
 
   const isNameDialog = dialog?.kind === 'create' || dialog?.kind === 'rename';
+  const formName = dialog && 'name' in dialog ? dialog.name : '';
   const dialogTitle = dialog?.kind === 'create' ? 'Tạo Modpack'
     : dialog?.kind === 'rename' ? 'Đổi tên Modpack'
       : dialog?.kind === 'delete' ? 'Xóa Modpack' : 'Xuất Modpack';
@@ -236,8 +237,10 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
           {isNameDialog && <label className="modpacks-field" htmlFor="modpack-name">
             <span>TÊN MODPACK</span>
             <input id="modpack-name" autoFocus required minLength={2} maxLength={64}
-              value={dialog.name} disabled={busy} placeholder="Ví dụ: Survival RPG"
-              onChange={(event) => setDialog({ ...dialog, name: event.target.value })} />
+              value={formName} disabled={busy} placeholder="Ví dụ: Survival RPG"
+              onChange={(event) => {
+                if (dialog.kind === 'create' || dialog.kind === 'rename') setDialog({ ...dialog, name: event.target.value });
+              }} />
             <small>Minecraft 1.21.1 · Fabric 0.18.4 · Java 21</small>
           </label>}
           {dialog.kind === 'delete' && <p className="modpacks-danger-text">Xóa vĩnh viễn <strong>{dialog.name}</strong>, bao gồm mods, config và tất cả world Singleplayer trong pack này. Không thể hoàn tác.</p>}
@@ -251,7 +254,7 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
           </>}
           <div className="modpacks-dialog-actions">
             <button type="button" disabled={busy} onClick={() => setDialog(null)}>HỦY</button>
-            <button type="submit" disabled={busy || (isNameDialog && dialog.name.trim().length < 2)}
+            <button type="submit" disabled={busy || (isNameDialog && formName.trim().length < 2)}
               className={dialog.kind === 'delete' ? 'danger' : 'primary'}>
               {busy ? 'ĐANG XỬ LÝ...' : dialog.kind === 'create' ? 'TẠO MODPACK'
                 : dialog.kind === 'rename' ? 'LƯU TÊN' : dialog.kind === 'delete' ? 'XÓA VĨNH VIỄN' : 'XUẤT ZIP'}
