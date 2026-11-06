@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$GH_TOKEN" ]]; then
-            echo "::error::Configure the repository Actions secret BESTIARY_RELEASE_PAT. Use a fine-grained GitHub PAT scoped to this repo with Contents: Read and Write and Actions: Read. Never paste tokens into chat or logs."
+            echo "::error::Configure the repository Actions secret BESTIARY_RELEASE_PAT. Use a fine-grained GitHub PAT covering BOTH codespaces-blank and bestiary-distribution with Contents: Read and Write and Actions: Read. Never paste tokens into chat or logs."
             exit 1
           fi
 
@@ -52,19 +52,60 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release already exists. Refusing to overwrite." >&2
-            exit 1
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              publish/BestiaryLauncher-Setup-5.5.0.exe \
+              publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$VERIFIED_COMMIT" \
+              --title "Bestiary Launcher 5.5.0 - NeoForge personal modpacks" \
+              --notes "Create independent modpacks with Minecraft release, Vanilla/Fabric/Forge/NeoForge/Quilt and selected loader version. Windows CI verified NeoForge 1.21.1 official installer and 15-second real Java process launch; Create/Rename/Delete QA passed. SVFrame Official client remains separate. This does not certify world creation or every installed mod's compatibility." \
+              --latest
           fi
-          gh release create "$TAG" \
-            publish/BestiaryLauncher-Setup-5.5.0.exe \
-            publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$VERIFIED_COMMIT" \
-            --title "Bestiary Launcher 5.5.0 - NeoForge personal modpacks" \
-            --notes "Create independent modpacks with Minecraft release, Vanilla/Fabric/Forge/NeoForge/Quilt and selected loader version. Windows CI verified NeoForge 1.21.1 official installer and 15-second real Java process launch; Create/Rename/Delete QA passed. SVFrame Official client remains separate. This does not certify world creation or every installed mod's compatibility." \
-            --latest
           asset="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="BestiaryLauncher-Setup-5.5.0.exe")')"
           test "$(jq -r .digest <<< "$asset")" = "sha256:$VERIFIED_SHA256"
           test "$(jq -r .size <<< "$asset")" = "$VERIFIED_SIZE"
           echo "RELEASED launcher-v5.5.0 SHA256=$VERIFIED_SHA256 SIZE=$VERIFIED_SIZE"
+
+      - name: Update and verify distribution auto-updater metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='repos/aristheg201/bestiary-distribution/contents/bestiary-distribution/app-updates.json'
+          gh api "$api?ref=main" > current-update.json
+          python3 - <<'PY'
+          import base64, json
+          d = json.load(open('current-update.json', encoding='utf-8'))
+          data = json.loads(base64.b64decode(d['content']).decode('utf-8'))
+          launcher = data['products']['launcher']
+          launcher['version'] = '5.5.0'
+          launcher['installerUrl'] = 'https://github.com/aristheg201/codespaces-blank/releases/download/launcher-v5.5.0/BestiaryLauncher-Setup-5.5.0.exe'
+          launcher['sha256'] = '1729ae65265488a68156a05d16bcb06d38809b213cb7693e46fab3ad593509c1'
+          launcher['assetSize'] = 89500707
+          launcher['mandatoryBelowVersion'] = '5.4.9'
+          launcher['releaseNotes'] = ('Bestiary Launcher 5.5.0: tạo modpack riêng và chọn Minecraft release, '
+            'Vanilla/Fabric/Forge/NeoForge/Quilt cùng loader version tương thích. '
+            'NeoForge 1.21.1 đã được CI kiểm thử installer, tạo profile và khởi chạy Java trong 15 giây. '
+            'SVFrame Official Full/Lite không thay đổi. Chưa chứng nhận khả năng tạo world và mọi mod bên thứ ba.')
+          content = (json.dumps(data, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+          payload = {
+            'message': 'release(updater): roll out QA-verified Bestiary Launcher 5.5.0 with NeoForge support',
+            'content': base64.b64encode(content).decode('ascii'),
+            'sha': d['sha'],
+            'branch': 'main',
+          }
+          with open('updater-put.json', 'w', encoding='utf-8') as target:
+            json.dump(payload, target)
+          PY
+          gh api -X PUT "$api" --input updater-put.json >/dev/null
+          gh api "$api?ref=main" > verify-update.json
+          python3 - <<'PY'
+          import base64, json
+          metadata=json.load(open('verify-update.json', encoding='utf-8'))
+          update=json.loads(base64.b64decode(metadata['content']))['products']['launcher']
+          assert update['version'] == '5.5.0'
+          assert update['sha256'] == '1729ae65265488a68156a05d16bcb06d38809b213cb7693e46fab3ad593509c1'
+          assert update['installerUrl'].endswith('/launcher-v5.5.0/BestiaryLauncher-Setup-5.5.0.exe')
+          assert update['assetSize'] == 89500707
+          print('AUTO_UPDATE_VERIFIED=5.5.0')
+          PY
