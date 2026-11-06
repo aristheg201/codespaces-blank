@@ -266,7 +266,7 @@ $keybindService = Get-Content 'source/src/main/core/KeybindSettingsService.ts' -
 $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 $generator = Get-Content 'source/src/main/core/JvmProfileGenerator.ts' -Raw
 
-if ($appSource -notmatch "currentVersion: '5\.4\.9'") { throw '5.5.0 version metadata missing.' }
+if ($appSource -notmatch "currentVersion: '5\.5\.0'") { throw '5.5.0 version metadata missing.' }
 if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM profile contract regressed.' }
 if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 3072') { throw '3 GB minimum client heap regressed.' }
 if ($main -notmatch 'BESTIARY_LAUNCHER_STARTUP_AUTO_UPDATE_V547' -or $main -notmatch 'appUpdater\?\.checkAndDownload\(\)') { throw 'Launcher startup auto-update contract missing.' }
@@ -291,14 +291,14 @@ if ($main -notmatch "bestiary:modpacks-create" -or $ipc -notmatch 'interface Mod
 if ($appSource -notmatch '<ModpacksScreen' -or $modpacksUI -notmatch 'My Modpacks') { throw 'Modpack UI missing.' }
 if ($modpackManager -notmatch 'importZip' -or $modpackManager -notmatch 'exportZip' -or $modpackManager -notmatch 'duplicate') { throw 'Modpack backend incomplete.' }
 if ($modpacksUI -match 'window\.(prompt|confirm)\(') { throw 'Unsupported Electron native modal survived.' }
-if ($modpacksUI -notmatch 'role="dialog"' -or $modpacksUI -notmatch 'onClick={openCreate}' -or $modpacksUI -notmatch 'TẠO MODPACK') { throw 'Interactive React Create dialog missing.' }
+if ($modpacksUI -notmatch 'onClick={openCreate}' -or $modpacksUI -notmatch '<CreateModpackDialog') { throw 'Modpack Create entry point missing.' }
 $catalog = Get-Content 'source/src/main/core/LoaderCatalog.ts' -Raw
 $runtime = Get-Content 'source/src/main/core/PersonalRuntimeInstaller.ts' -Raw
 $loaderUi = Get-Content 'source/src/renderer/src/components/CreateModpackDialog.tsx' -Raw
 if ($catalog -notmatch 'neoforge' -or $catalog -notmatch 'maven-metadata.xml') { throw 'Official NeoForge catalog is missing.' }
 if ($runtime -notmatch 'installForgeFamily' -or $runtime -notmatch "['-]--installClient") { throw 'Personal NeoForge installer is missing.' }
 if ($main -notmatch 'startPersonalModpack' -or $main -notmatch 'modpacks-play') { throw 'Personal pack launch IPC is missing.' }
-if ($loaderUi -notmatch 'MINECRAFT VERSION' -or $loaderUi -notmatch 'LOADER VERSION') { throw 'Minecraft/loader selection UI is missing.' }
+if ($loaderUi -notmatch 'MINECRAFT VERSION' -or $loaderUi -notmatch 'LOADER VERSION' -or $loaderUi -notmatch 'TẠO MODPACK' -or $loaderUi -notmatch 'role="dialog"') { throw 'Interactive Minecraft/loader Create dialog is missing.' }
 $installer = Get-Item 'source/release/BestiaryLauncher-Setup-5.5.0.exe' -ErrorAction Stop
 $unpacked = Resolve-Path 'source/release/win-unpacked'
 $exe = Get-Item (Join-Path $unpacked 'Bestiary Launcher.exe') -ErrorAction Stop
