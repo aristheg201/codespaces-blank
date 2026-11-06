@@ -1,0 +1,70 @@
+name: Publish verified Bestiary Launcher 5.5.0 with owner token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.BESTIARY_RELEASE_PAT }}
+      VERIFIED_RUN: '42260985683'
+      VERIFIED_COMMIT: '466cee6483b7f3b1897612a97b387f694cbf7f2e'
+      VERIFIED_SHA256: '1729ae65265488a68156a05d16bcb06d38809b213cb7693e46fab3ad593509c1'
+      TAG: launcher-v5.5.0
+    steps:
+      - name: Require owner-managed release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::Configure the repository Actions secret BESTIARY_RELEASE_PAT. Use a fine-grained GitHub PAT scoped to this repo with Contents: Read and Write and Actions: Read. Never paste tokens into chat or logs."
+            exit 1
+          fi
+
+      - name: Verify successful real NeoForge game launch and exact Windows installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(gh run view "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha)"
+          test "$(jq -r .conclusion <<< "$metadata")" = success
+          test "$(jq -r .headSha <<< "$metadata")" = "$VERIFIED_COMMIT"
+          mkdir -p publish
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name BestiaryLauncher-Windows-5.5.0-CANDIDATE --dir publish
+          exe=publish/BestiaryLauncher-Setup-5.5.0.exe
+          test "$(stat -c %s "$exe")" -gt 80000000
+          actual="$(sha256sum "$exe" | cut -d ' ' -f 1)"
+          manifest="$(tr -d '\r' < publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt | awk '{print tolower($1)}')"
+          test "$actual" = "$manifest"
+          test "$actual" = "$VERIFIED_SHA256"
+          tr -d '\r' < publish/qa-create-v550.log | grep -F 'QA PASS: NeoForge Create -> selected metadata -> Rename -> Delete'
+          tr -d '\r' < publish/qa-neoforge-install-v550.log | grep -F 'QA PASS: Real NeoForge 1.21.1'
+          tr -d '\r' < publish/qa-neoforge-install-v550.log | grep -F 'QA PASS: NeoForge Minecraft Java process started and remained alive'
+          echo "VERIFIED_SIZE=$(stat -c %s "$exe")" >> "$GITHUB_ENV"
+
+      - name: Publish Release and verify assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists. Refusing to overwrite." >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            publish/BestiaryLauncher-Setup-5.5.0.exe \
+            publish/BestiaryLauncher-Setup-5.5.0-SHA256.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$VERIFIED_COMMIT" \
+            --title "Bestiary Launcher 5.5.0 - NeoForge personal modpacks" \
+            --notes "Create independent modpacks with Minecraft release, Vanilla/Fabric/Forge/NeoForge/Quilt and selected loader version. Windows CI verified NeoForge 1.21.1 official installer and 15-second real Java process launch; Create/Rename/Delete QA passed. SVFrame Official client remains separate. This does not certify world creation or every installed mod's compatibility." \
+            --latest
+          asset="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name=="BestiaryLauncher-Setup-5.5.0.exe")')"
+          test "$(jq -r .digest <<< "$asset")" = "sha256:$VERIFIED_SHA256"
+          test "$(jq -r .size <<< "$asset")" = "$VERIFIED_SIZE"
+          echo "RELEASED launcher-v5.5.0 SHA256=$VERIFIED_SHA256 SIZE=$VERIFIED_SIZE"
