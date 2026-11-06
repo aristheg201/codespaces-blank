@@ -1,0 +1,40 @@
+name: Inspect NeoForge official JVM module path
+on:
+  push:
+    branches: [feature/bestiary-launcher-multiloader-v550]
+    paths: ['.github/workflows/inspect-neoforge-module-v550.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Extract NeoForge version metadata from official installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --max-time 90 \
+            https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.265/neoforge-21.1.265-installer.jar \
+            -o neoforge-installer.jar
+          python3 - <<'PY'
+          import json, zipfile
+          with zipfile.ZipFile('neoforge-installer.jar') as archive:
+            names=archive.namelist()
+            print('JAR candidate entries:',[n for n in names if n.endswith('version.json') or 'install_profile' in n or n.endswith('profile.json')])
+            for name in names:
+              if name.endswith('version.json') or name.endswith('install_profile.json') or name.endswith('profile.json'):
+                try:
+                  data=json.loads(archive.read(name))
+                except Exception as exc:
+                  print('Unparseable',name,str(exc))
+                  continue
+                print('FILE',name,'KEYS',list(data))
+                if isinstance(data.get('arguments'),dict):
+                  print('JVM_ARGS',json.dumps(data['arguments'].get('jvm',[]),ensure_ascii=False)[:25000])
+                  print('GAME_ARGS',json.dumps(data['arguments'].get('game',[]),ensure_ascii=False)[:1500])
+                if isinstance(data.get('libraries'),list):
+                  print('LIBRARIES count',len(data['libraries']))
+                  print('CPW LIBRARIES',json.dumps([x for x in data['libraries'] if isinstance(x,dict) and ('cpw.mods' in str(x.get('name')) or 'asm' in str(x.get('name')) or 'JarJar' in str(x.get('name')))],ensure_ascii=False)[:12000])
+          PY
