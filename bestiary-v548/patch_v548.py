@@ -136,7 +136,7 @@ def home_patch(s):
     s = replace_once(s, marker, marker + '\n  onModpacks: () => void;')
     marker = 'onLibrary, onAccount, account,'
     s = replace_once(s, marker, 'onLibrary, onModpacks, onAccount, account,')
-    marker = '<button onClick={onLibrary}>'
+    marker = '<button className="bestiary-library-link" onClick={onLibrary}>'
     if marker not in s:
         raise SystemExit('Could not find Home Library button')
     s = replace_once(s, marker, '<button onClick={onModpacks}><b>▦</b><span><strong>My Modpacks</strong><small>Tạo, import, quản lý profile cá nhân</small></span></button>\n          ' + marker)
