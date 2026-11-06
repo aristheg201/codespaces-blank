@@ -59,14 +59,11 @@ replace_one('src/shared/ipc.ts',
 
 preload_path = root / 'src/preload/index.ts'
 preload = preload_path.read_text(encoding='utf-8')
-preload, count = re.subn(
-    r"import type \\{([^}]*)\\} from '../shared/ipc';",
-    lambda m: "import type {" + m.group(1).rstrip() + ", ModpackLoader, ModpackSelection } from '../shared/ipc';",
-    preload, count=1,
+preload_path.write_text(
+    "import type { ModpackLoader, ModpackSelection } from '../shared/ipc';\n" + preload,
+    encoding='utf-8',
 )
-if count != 1:
-    raise SystemExit('Preload shared IPC import not found.')
-preload_path.write_text(preload, encoding='utf-8')
+
 replace_one('src/preload/index.ts',
 '''  listModpacks: () => ipcRenderer.invoke('bestiary:modpacks-list'),
   createModpack: (name: string) => ipcRenderer.invoke('bestiary:modpacks-create', name),''',
