@@ -22,8 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN: '42258519832'
-      EXPECTED_HEAD_SHA: '358ec68f7f3e3bee28c63b81eb467e1bff6a183b'
+      SOURCE_RUN: '42260985683'
+      EXPECTED_HEAD_SHA: '466cee6483b7f3b1897612a97b387f694cbf7f2e'
       TAG: launcher-v5.5.0
       EXE: BestiaryLauncher-Setup-5.5.0.exe
     steps:
