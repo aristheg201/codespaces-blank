@@ -107,7 +107,7 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
     const mc = mcParts[0] === 1 ? (mcParts[1] ?? 0) : 100 + (mcParts[0] ?? 0);
     const patch = mcParts[0] === 1 ? (mcParts[2] ?? 0) : 0;
     const javaMajor = mc >= 126 ? 25 : (mc > 20 || (mc === 20 && patch >= 5)) ? 21 :
-      mc >= 18 ? 17 : mc >= 17 ? 16 : 8;
+      mc >= 17 ? 17 : 8;
     const javaPath = await jreManager.ensureJava(javaMajor);
 
     sendProgress({
