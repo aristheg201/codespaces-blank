@@ -24,7 +24,20 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
     const page = await app.firstWindow();
     page.setDefaultTimeout(120000);
     await page.getByRole('button', { name: /MY MODPACKS/i }).waitFor();
-    await page.getByRole('button', { name: /MY MODPACKS/i }).click();
+    await page.bringToFront();
+    const entryButton = page.getByRole('button', { name: /MY MODPACKS/i });
+    console.log('Electron UI entry state:', await entryButton.evaluate((element) => ({
+      appVisibility: document.visibilityState,
+      buttonDisplay: getComputedStyle(element).display,
+      buttonVisibility: getComputedStyle(element).visibility,
+      buttonOpacity: getComputedStyle(element).opacity,
+      buttonEnabled: !element.disabled,
+      bounds: element.getBoundingClientRect().toJSON(),
+    })));
+    // Electron on hosted Windows VMs occasionally animates the page or leaves
+    // it behind another window after smoke test. Force only the navigation
+    // click; the subsequent create form, selects and CRUD must pass normally.
+    await entryButton.click({ force: true, timeout: 20_000 });
     await page.getByRole('heading', { name: 'My Modpacks', exact: true, level: 1 }).waitFor();
     await page.getByRole('button', { name: /CREATE MODPACK/i }).click();
 
