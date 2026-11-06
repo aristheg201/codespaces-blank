@@ -57,6 +57,7 @@ jobs:
             build-output-v550/BestiaryLauncher-Setup-5.5.0-SHA256.txt
             build-output-v550/feature-contract.txt
             build-output-v550/qa-create-v550.log
+            build-output-v550/qa-neoforge-install-v550.log
           if-no-files-found: error
           retention-days: 14
       - name: Upload error logs
@@ -67,4 +68,5 @@ jobs:
           path: |
             ci-v550.log
             qa-create-v550.log
+            qa-neoforge-install-v550.log
           if-no-files-found: ignore
