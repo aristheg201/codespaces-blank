@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ModpackLoader } from '../../shared/ipc';
+import type { ModpackLoader, ModpackSelection } from '../../shared/ipc';
 
 /**
  * Version catalogs are resolved only from Mojang and the official loader projects.
@@ -16,12 +16,6 @@ const cache = new Map<string, { expiresAt: number; value: string[] }>();
 interface MojangVersion { id: string; type: string; url: string; }
 interface MojangManifest { versions: MojangVersion[]; }
 interface LoaderEntry { loader?: { version?: string }; version?: string; }
-
-export interface ModpackSelection {
-  minecraftVersion: string;
-  loader: ModpackLoader;
-  loaderVersion: string | null;
-}
 
 function versionParts(value: string): number[] {
   return value.split(/[^0-9]+/u).filter(Boolean).map((v) => Number.parseInt(v, 10));
