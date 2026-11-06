@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "vn.bestiary.launcher",
+  "productName": "Bestiary Launcher",
+  "artifactName": "BestiaryLauncher-Setup-${version}.${ext}",
+  "asar": true,
+  "compression": "maximum",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist-main/**/*",
+    "dist-renderer/**/*",
+    "resources/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "dist-main/main/index.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "executableName": "Bestiary Launcher",
+    "verifyUpdateCodeSignature": false,
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "Bestiary Launcher",
+    "runAfterFinish": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico",
+    "include": "build/installer.nsh",
+    "deleteAppDataOnUninstall": false,
+    "warningsAsErrors": true
+  }
+}
