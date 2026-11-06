@@ -299,7 +299,7 @@ $loaderUi = Get-Content 'source/src/renderer/src/components/CreateModpackDialog.
 if ($catalog -notmatch 'neoforge' -or $catalog -notmatch 'maven-metadata.xml') { throw 'Official NeoForge catalog is missing.' }
 if ($runtime -notmatch 'installForgeFamily' -or $runtime -notmatch "['-]--installClient") { throw 'Personal NeoForge installer is missing.' }
 if ($main -notmatch 'startPersonalModpack' -or $main -notmatch 'modpacks-play') { throw 'Personal pack launch IPC is missing.' }
-if ($jvmFlags -notmatch 'java.base/java.lang.invoke=ALL-UNNAMED' -or $main -notmatch 'withLoaderJvmArgs') { throw 'NeoForge JVM module access flags are missing.' }
+if ($jvmFlags -notmatch 'module-path=' -or $jvmFlags -notmatch 'ALL-MODULE-PATH' -or $main -notmatch 'await withLoaderJvmArgs') { throw 'NeoForge profile JVM module-path integration is missing.' }
 if ($loaderUi -notmatch 'MINECRAFT VERSION' -or $loaderUi -notmatch 'LOADER VERSION' -or $loaderUi -notmatch 'TẠO MODPACK' -or $loaderUi -notmatch 'role="dialog"') { throw 'Interactive Minecraft/loader Create dialog is missing.' }
 $installer = Get-Item 'source/release/BestiaryLauncher-Setup-5.5.0.exe' -ErrorAction Stop
 $unpacked = Resolve-Path 'source/release/win-unpacked'

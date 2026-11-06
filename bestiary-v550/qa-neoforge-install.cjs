@@ -67,7 +67,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         javaPath: java,
         minecraftVersion: '1.21.1',
         customVersionId: id,
-        extraJvmArgs: withLoaderJvmArgs('neoforge', []),
+        extraJvmArgs: await withLoaderJvmArgs('neoforge', [], home, id),
         memory: { minMb: 1024, maxMb: 3072 },
         window: { width: 1024, height: 768, fullscreen: false },
         timeoutMs: 480_000,

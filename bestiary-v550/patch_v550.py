@@ -140,7 +140,7 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
       fabricLoader: pack.loader === 'fabric' ? pack.loaderVersion || undefined : undefined,
       memory: { minMb: settings.minRamMb, maxMb: settings.maxRamMb },
       window: { width: settings.width, height: settings.height, fullscreen: settings.fullscreen },
-      extraJvmArgs: withLoaderJvmArgs(pack.loader, settings.generatedJvmArgs),
+      extraJvmArgs: await withLoaderJvmArgs(pack.loader, settings.generatedJvmArgs, directory, profileId),
       timeoutMs: 120_000,
     });
     sendProgress({ stage: 'running', percent: 100, title: 'Minecraft đang chạy',
