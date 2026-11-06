@@ -103,7 +103,12 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
       stage: 'java', percent: 12, title: 'Chuẩn bị Java', detail: pack.minecraftVersion,
       speedMBps: 0, etaSeconds: null,
     });
-    const javaPath = await jreManager.ensureJavaForMinecraft(pack.minecraftVersion);
+    const mcParts = pack.minecraftVersion.split('.').map((segment) => Number.parseInt(segment, 10));
+    const mc = mcParts[0] === 1 ? (mcParts[1] ?? 0) : 100 + (mcParts[0] ?? 0);
+    const patch = mcParts[0] === 1 ? (mcParts[2] ?? 0) : 0;
+    const javaMajor = mc >= 126 ? 25 : (mc > 20 || (mc === 20 && patch >= 5)) ? 21 :
+      mc >= 18 ? 17 : mc >= 17 ? 16 : 8;
+    const javaPath = await jreManager.ensureJava(javaMajor);
 
     sendProgress({
       stage: 'fabric', percent: 35, title: 'Chuẩn bị ' + pack.loader,
@@ -153,21 +158,6 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
 
 """
 replace_one('src/main/index.ts', 'async function accountSnapshot() {', new_function + 'async function accountSnapshot() {')
-
-jre_path = root / 'src/main/core/JreManager.ts'
-jre = jre_path.read_text(encoding='utf-8')
-pat = r'(getRequiredJavaVersion\(minecraftVersion: string\): number \{\s*const parsed = parseMinecraftVersion\(minecraftVersion\);)([\s\S]*?)(\n  \})'
-m = re.search(pat, jre)
-if not m:
-    raise SystemExit('Unable to find exact JreManager.getRequiredJavaVersion implementation.')
-newbody = """
-    if (compareVersion(parsed, [26, 0, 0]) >= 0) return 25;
-    if (compareVersion(parsed, [1, 20, 5]) >= 0) return 21;
-    if (compareVersion(parsed, [1, 18, 0]) >= 0) return 17;
-    if (compareVersion(parsed, [1, 17, 0]) >= 0) return 16;
-    return 8;"""
-jre = jre[:m.start()] + m.group(1) + newbody + m.group(3) + jre[m.end():]
-jre_path.write_text(jre, encoding='utf-8')
 
 replace_one('src/renderer/src/App.tsx', "currentVersion: '5.4.9'", "currentVersion: '5.5.0'")
 home = root / 'src/renderer/src/components/Home.tsx'
