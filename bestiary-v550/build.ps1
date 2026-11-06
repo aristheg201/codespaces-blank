@@ -329,6 +329,10 @@ Pop-Location
 node bestiary-v550/qa-create.cjs *>&1 | Tee-Object -FilePath 'qa-create-v550.log'
 if ($LASTEXITCODE -ne 0) { throw 'Electron UI Create/Rename/Delete QA failed.' }
 
+Write-Host '=== NeoForge 1.21.1 REAL installer integration QA ==='
+node bestiary-v550/qa-neoforge-install.cjs *>&1 | Tee-Object -FilePath 'qa-neoforge-install-v550.log'
+if ($LASTEXITCODE -ne 0) { throw 'NeoForge runtime installation QA failed.' }
+
 
 Remove-Item 'build-output-v550' -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force 'build-output-v550/diagnostic-source' | Out-Null
@@ -337,6 +341,7 @@ $hash = (Get-FileHash 'build-output-v550/BestiaryLauncher-Setup-5.5.0.exe' -Algo
 "$hash  BestiaryLauncher-Setup-5.5.0.exe" | Set-Content 'build-output-v550/BestiaryLauncher-Setup-5.5.0-SHA256.txt' -Encoding ascii
 Copy-Item $stdoutPath 'build-output-v550/runtime-smoke-stdout.log' -Force -ErrorAction SilentlyContinue
 Copy-Item 'qa-create-v550.log' 'build-output-v550/qa-create-v550.log' -Force -ErrorAction Stop
+Copy-Item 'qa-neoforge-install-v550.log' 'build-output-v550/qa-neoforge-install-v550.log' -Force -ErrorAction Stop
 Copy-Item $stderrPath 'build-output-v550/runtime-smoke-stderr.log' -Force -ErrorAction SilentlyContinue
 Copy-Item 'source/src/renderer/src/components/ContentScreen.tsx' 'build-output-v550/diagnostic-source/ContentScreen.tsx' -Force
 Copy-Item 'source/src/renderer/src/components/KeybindPanel.tsx' 'build-output-v550/diagnostic-source/KeybindPanel.tsx' -Force
@@ -350,6 +355,7 @@ personalPlayIsolated=true
 reactModpackDialogs=true
 createRenameDeleteE2E=true
 neoForgeSelectionE2E=true
+neoForgeRealInstallerE2E=true
 noWindowPromptOrConfirm=true
 startupAutoUpdate=true
 sha256=$hash
