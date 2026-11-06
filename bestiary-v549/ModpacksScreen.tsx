@@ -239,7 +239,7 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
             <input id="modpack-name" autoFocus required minLength={2} maxLength={64}
               value={formName} disabled={busy} placeholder="Ví dụ: Survival RPG"
               onChange={(event) => {
-                if (dialog.kind === 'create' || dialog.kind === 'rename') setDialog({ ...dialog, name: event.target.value });
+                if (dialog && (dialog.kind === 'create' || dialog.kind === 'rename')) setDialog({ ...dialog, name: event.target.value });
               }} />
             <small>Minecraft 1.21.1 · Fabric 0.18.4 · Java 21</small>
           </label>}
@@ -248,7 +248,7 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
             <p>Xuất modpack <strong>{dialog.name}</strong> thành ZIP.</p>
             <label className="modpacks-checkbox">
               <input type="checkbox" checked={dialog.includeWorlds} disabled={busy}
-                onChange={(event) => setDialog({ ...dialog, includeWorlds: event.target.checked })} />
+                onChange={(event) => { if (dialog?.kind === 'export') setDialog({ ...dialog, includeWorlds: event.target.checked }); }} />
               Bao gồm world Singleplayer (saves)
             </label>
           </>}

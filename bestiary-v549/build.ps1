@@ -262,7 +262,7 @@ $keybindService = Get-Content 'source/src/main/core/KeybindSettingsService.ts' -
 $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 $generator = Get-Content 'source/src/main/core/JvmProfileGenerator.ts' -Raw
 
-if ($appSource -notmatch "currentVersion: '5\.4\.8'") { throw '5.4.9 version metadata missing.' }
+if ($appSource -notmatch "currentVersion: '5\.4\.9'") { throw '5.4.9 version metadata missing.' }
 if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM profile contract regressed.' }
 if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 3072') { throw '3 GB minimum client heap regressed.' }
 if ($main -notmatch 'BESTIARY_LAUNCHER_STARTUP_AUTO_UPDATE_V547' -or $main -notmatch 'appUpdater\?\.checkAndDownload\(\)') { throw 'Launcher startup auto-update contract missing.' }
@@ -286,7 +286,7 @@ $modpacksUI = Get-Content 'source/src/renderer/src/components/ModpacksScreen.tsx
 if ($main -notmatch "bestiary:modpacks-create" -or $ipc -notmatch 'interface ModpackInfo' -or $preload -notmatch 'bestiary:modpacks-import') { throw 'Modpack IPC not wired.' }
 if ($appSource -notmatch '<ModpacksScreen' -or $modpacksUI -notmatch 'My Modpacks') { throw 'Modpack UI missing.' }
 if ($modpackManager -notmatch 'importZip' -or $modpackManager -notmatch 'exportZip' -or $modpackManager -notmatch 'duplicate') { throw 'Modpack backend incomplete.' }
-if ($modpacksUI -match 'window\\.(prompt|confirm)\\(') { throw 'Unsupported Electron native modal survived.' }
+if ($modpacksUI -match 'window\.(prompt|confirm)\(') { throw 'Unsupported Electron native modal survived.' }
 if ($modpacksUI -notmatch 'role="dialog"' -or $modpacksUI -notmatch 'onClick={openCreate}' -or $modpacksUI -notmatch 'TẠO MODPACK') { throw 'Interactive React Create dialog missing.' }
 $installer = Get-Item 'source/release/BestiaryLauncher-Setup-5.4.9.exe' -ErrorAction Stop
 $unpacked = Resolve-Path 'source/release/win-unpacked'

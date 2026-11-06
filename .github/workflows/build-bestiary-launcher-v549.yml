@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: bestiary-v549-hotfix
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-windows:
