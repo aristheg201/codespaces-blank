@@ -28,7 +28,7 @@ if (!fs.existsSync(exe)) throw new Error('Packaged Electron EXE does not exist: 
     await page.getByRole('button', { name: /MY MODPACKS/i }).waitFor({ state: 'visible' });
     await page.getByRole('button', { name: /MY MODPACKS/i }).click();
 
-    await page.getByRole('heading', { name: 'My Modpacks' }).waitFor();
+    await page.getByRole('heading', { name: 'My Modpacks', exact: true, level: 1 }).waitFor();
     const createButton = page.getByRole('button', { name: /CREATE MODPACK/i });
     await createButton.click();
     const dialog = page.getByRole('dialog');
