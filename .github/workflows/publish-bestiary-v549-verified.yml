@@ -1,0 +1,72 @@
+name: Publish verified Bestiary Launcher 5.4.9 after Electron UI QA
+
+on:
+  push:
+    branches:
+      - hotfix/bestiary-launcher-v549-modpack-dialogs
+    paths:
+      - .github/workflows/publish-bestiary-v549-verified.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: bestiary-launcher-v549-publish-verified
+  cancel-in-progress: false
+
+jobs:
+  publish-verified:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFIED_RUN: '42240690398'
+      VERIFIED_COMMIT: 'e63076e93b81dbba10048cbfff44e9a70ec4066d'
+      VERIFIED_SHA256: '8e6ab4dfc937deebcff3360f8e29a1a1bffaa86a6d2386df5a456a94f4bbabe9'
+      VERIFIED_SIZE: '89490192'
+    steps:
+      - name: Verify passing Windows CI run and download exact artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(gh run view "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha -q '[.conclusion,.headSha] | @tsv')"
+          test "$metadata" = "$(printf 'success\t%s' "$VERIFIED_COMMIT")"
+          mkdir -p publish
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name BestiaryLauncher-Windows-5.4.9-VERIFIED --dir publish
+          test -s publish/BestiaryLauncher-Setup-5.4.9.exe
+          test "$(stat -c %s publish/BestiaryLauncher-Setup-5.4.9.exe)" -eq "$VERIFIED_SIZE"
+          actual="$(sha256sum publish/BestiaryLauncher-Setup-5.4.9.exe | cut -d ' ' -f 1)"
+          expected="$(tr -d '\r' < publish/BestiaryLauncher-Setup-5.4.9-SHA256.txt | awk '{print tolower($1)}')"
+          test "$actual" = "$expected"
+          test "$actual" = "$VERIFIED_SHA256"
+          tr -d '\r' < publish/qa-create-v549.log | grep -Fx 'QA PASS: Electron UI Create -> persist -> Rename -> Export dialog -> Delete'
+          tr -d '\r' < publish/feature-contract.txt | grep -Fx 'createRenameDeleteE2E=true'
+          tr -d '\r' < publish/feature-contract.txt | grep -Fx 'reactModpackDialogs=true'
+
+      - name: Publish verified hotfix Release 5.4.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=launcher-v5.4.9
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              publish/BestiaryLauncher-Setup-5.4.9.exe \
+              publish/BestiaryLauncher-Setup-5.4.9-SHA256.txt \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$VERIFIED_COMMIT" \
+              --title "Bestiary Launcher 5.4.9 — Fix Create Modpack" \
+              --notes "Fix Create/Rename/Delete/Export modpack buttons by replacing Electron-unsupported prompt/confirm with React dialogs. Windows Electron QA passed real Create, Rename, Export dialog, and Delete interactions. Auto-update remains supported. Personal modpack launch and CurseForge API search/download are not yet implemented." \
+              --latest
+          else
+            echo 'Release already exists, checking files.' 
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
+            -q '.assets[].name' | grep -Fx 'BestiaryLauncher-Setup-5.4.9.exe'
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
+            -q '.assets[].name' | grep -Fx 'BestiaryLauncher-Setup-5.4.9-SHA256.txt'
+          actual_remote="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[] | select(.name=="BestiaryLauncher-Setup-5.4.9.exe") | .digest')"
+          test "$actual_remote" = "sha256:$VERIFIED_SHA256"
+          echo "RELEASED $tag SHA256=$VERIFIED_SHA256"
