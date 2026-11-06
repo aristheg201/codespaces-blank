@@ -159,6 +159,18 @@ new_function = """async function startPersonalModpack(id: string): Promise<{ ok:
 """
 replace_one('src/main/index.ts', 'async function accountSnapshot() {', new_function + 'async function accountSnapshot() {')
 
+jre_file = root / 'src/main/core/JreManager.ts'
+jre_text = jre_file.read_text(encoding='utf-8')
+jre_text, java_type_changes = re.subn(
+    r'(type JavaMajorVersion\\s*=\\s*[^;\\n]+)(;)',
+    lambda m: (m.group(1) if '25' in m.group(1) else m.group(1) + ' | 25') + m.group(2),
+    jre_text,
+    count=1,
+)
+if java_type_changes != 1:
+    raise SystemExit('Could not extend JreManager runtime type to Java 25.')
+jre_file.write_text(jre_text, encoding='utf-8')
+
 replace_one('src/renderer/src/App.tsx', "currentVersion: '5.4.9'", "currentVersion: '5.5.0'")
 home = root / 'src/renderer/src/components/Home.tsx'
 home.write_text(home.read_text(encoding='utf-8').replace('5.4.9', '5.5.0'), encoding='utf-8')
