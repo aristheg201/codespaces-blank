@@ -77,8 +77,7 @@ replace_one('src/preload/index.ts',
 
 replace_one('src/main/index.ts',
 "import { ModpackManager } from './core/ModpackManager';",
-"import { ModpackManager } from './core/ModpackManager';\nimport { LoaderCatalog, validateModpackSelection } from './core/LoaderCatalog';\nimport { PersonalRuntimeInstaller } from './core/PersonalRuntimeInstaller';
-import { withLoaderJvmArgs } from './core/PersonalJvmArgs';")
+"import { ModpackManager } from './core/ModpackManager';\nimport { LoaderCatalog, validateModpackSelection } from './core/LoaderCatalog';\nimport { PersonalRuntimeInstaller } from './core/PersonalRuntimeInstaller';\nimport { withLoaderJvmArgs } from './core/PersonalJvmArgs';")
 
 replace_one('src/main/index.ts',
 "  ipcMain.handle('bestiary:modpacks-create', (_event, name: string) => modpackManager.create(name));",
