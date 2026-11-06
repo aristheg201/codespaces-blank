@@ -1,0 +1,65 @@
+name: Publish Bestiary Launcher 5.4.8 verified build
+
+on:
+  push:
+    branches:
+      - feature/bestiary-launcher-modpack-manager-v548
+    paths:
+      - '.github/workflows/publish-bestiary-launcher-v548.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: bestiary-launcher-v548-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '42233642200'
+      EXPECTED_SHA256: '916c79855a513334d88fb0942be46212b70a4aa389cac49ed3301669cbb792fb'
+      VERIFIED_SHA: '78f5692eb15ad0c6a4e58d34707060423fed1f13'
+      TAG: 'launcher-v5.4.8'
+      EXE: 'BestiaryLauncher-Setup-5.4.8.exe'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the exact passing build
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT="$(gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha -q '[.conclusion,.headSha] | @tsv')"
+          test "$RESULT" = "$(printf 'success\t%s' "$VERIFIED_SHA")"
+          mkdir -p release-files
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name BestiaryLauncher-5.4.8-ModpackManager-TEST --dir release-files
+          test -s "release-files/$EXE"
+          ACTUAL="$(sha256sum "release-files/$EXE" | cut -d ' ' -f 1)"
+          test "$ACTUAL" = "$EXPECTED_SHA256"
+          printf '%s  %s\n' "$ACTUAL" "$EXE" > "release-files/BestiaryLauncher-Setup-5.4.8-SHA256.txt"
+          test "$(stat -c %s "release-files/$EXE")" -gt 80000000
+
+      - name: Publish and verify GitHub Release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$VERIFIED_SHA" \
+              --title "Bestiary Launcher 5.4.8 - My Modpacks" \
+              --notes "Bestiary Launcher 5.4.8: Personal My Modpacks screen, per-pack mods/config/saves isolation, create/rename/duplicate/remove, enable/disable personal mods, local ZIP import/export. Keeps SVFrame official Full/Lite unchanged. Build/typecheck/Electron startup smoke verified. Personal modpack launching and CurseForge API remote downloads are not yet implemented." \
+              --latest
+          fi
+          gh release upload "$TAG" "release-files/$EXE" \
+            release-files/BestiaryLauncher-Setup-5.4.8-SHA256.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -Fx "$EXE"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -Fx "BestiaryLauncher-Setup-5.4.8-SHA256.txt"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[] | select(.name == "BestiaryLauncher-Setup-5.4.8.exe") | .size' | awk '$1 > 80000000 {pass=1} END {exit !pass}'
+          printf 'Published %s, SHA256 %s\n' "$TAG" "$EXPECTED_SHA256"
