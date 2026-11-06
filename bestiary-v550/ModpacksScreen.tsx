@@ -182,7 +182,7 @@ export function ModpacksScreen({ onBack }: { onBack: () => void }) {
   return <main className="modpacks-screen">
     <header className="modpacks-top">
       <div><button onClick={onBack}>← TRỞ VỀ</button><p>BESTIARY LAUNCHER</p><h1>My Modpacks</h1>
-        <small>Modpack cá nhân độc lập với SVFrame. Minecraft 1.21.1 · Fabric 0.18.4 · Java 21</small>
+        <small>Modpack cá nhân: tự chọn Minecraft version, loader và loader version. SVFrame Official vẫn độc lập.</small>
       </div>
       <div className="modpacks-actions">
         <button disabled={busy || dialog !== null} onClick={importZip}>IMPORT ZIP</button>
