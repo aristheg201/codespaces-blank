@@ -80,6 +80,18 @@ async function installForgeFamily(pack: ModpackInfo, root: string, javaPath: str
   if (await fs.pathExists(versionJson)) return expectedProfile;
 
   await seedVanillaClient(root, pack.minecraftVersion, onProgress);
+  // NeoForge/Forge's official --installClient requires the Minecraft Launcher
+  // profile file to exist, even when installing into a fresh private instance.
+  // Only initialize an empty profile registry; never overwrite a player's
+  // existing launcher_profiles.json or inject fabricated account credentials.
+  const profilesPath = path.join(root, 'launcher_profiles.json');
+  if (!(await fs.pathExists(profilesPath))) {
+    await fs.writeJson(profilesPath, {
+      profiles: {},
+      settings: {},
+      version: 3,
+    }, { spaces: 2 });
+  }
   await fs.ensureDir(installRoot);
   onProgress('Đang tải trình cài ' + (neoforge ? 'NeoForge ' : 'Forge ') + version + '...');
   const shaUrl = base + '.sha1';
