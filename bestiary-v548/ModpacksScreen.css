@@ -1,0 +1,29 @@
+.modpacks-screen{height:100vh;box-sizing:border-box;overflow:auto;background:#0a0d12;color:#edf2fb;padding:28px;font-family:inherit}
+.modpacks-screen button{cursor:pointer;border:1px solid #344052;border-radius:10px;padding:10px 14px;background:#192230;color:#e5edfa;font:inherit}
+.modpacks-screen button:disabled{opacity:.45;cursor:wait}
+.modpacks-screen button:hover:not(:disabled){border-color:#7e9ec9}
+.modpacks-screen .primary{background:#327ad0;border-color:#327ad0;color:white;font-weight:700}
+.modpacks-top,.modpacks-heading{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.modpacks-top p,.modpacks-heading small{font-size:11px;color:#7da9ec;letter-spacing:1.7px;font-weight:700}
+.modpacks-top h1{font-size:30px;margin:6px 0}.modpacks-top small{color:#96a4b8}
+.modpacks-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.modpacks-columns{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;margin-top:25px;min-height:400px}
+.modpacks-sidebar,.modpacks-main{background:#111821;border:1px solid #253346;border-radius:16px;padding:20px;min-width:0}
+.modpacks-sidebar h3{font-size:12px;letter-spacing:1px;color:#9ba9be}
+.modpacks-server,.modpacks-choice{width:100%;box-sizing:border-box;text-align:left;display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.modpacks-server{padding:12px;background:#172438;border:1px solid #324562;border-radius:10px}
+.modpacks-server small,.modpacks-choice small{color:#94a7bc;font-size:11px}
+.modpacks-choice.active,.modpacks-tabs button.active{background:#213c65;border-color:#4c82c3}
+.modpacks-heading h2{font-size:23px;margin:8px 0}.modpacks-heading p{color:#97a4b7;margin:0}
+.modpacks-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:25px;padding-bottom:15px;border-bottom:1px solid #2a3445}
+.modpacks-tabs button.primary{margin-left:auto}
+.modpacks-files{max-height:56vh;overflow:auto}
+.modpacks-file{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:15px 4px;border-bottom:1px solid #263242}
+.modpacks-file div:first-child{min-width:0;display:flex;flex-direction:column;gap:5px}
+.modpacks-file strong{word-break:break-word}.modpacks-file small{color:#96a4b8}
+.modpacks-file-actions{display:flex;gap:8px;flex-wrap:wrap}
+.modpacks-empty{padding:50px 15px;text-align:center;color:#a6b4c6}
+.modpacks-error{white-space:pre-wrap;background:#42232a;color:#ffc9c9;padding:12px;border-radius:10px}
+.modpacks-message{background:#1b3a31;color:#b5f0d3;padding:12px;border-radius:10px}
+.modpacks-note{color:#8d9cb0;font-size:12px;padding-top:20px;line-height:1.6}
+@media(max-width:850px){.modpacks-columns{grid-template-columns:1fr}.modpacks-top,.modpacks-heading{align-items:flex-start;flex-direction:column}}
