@@ -99,8 +99,9 @@ export class ModpackManager {
     return path.join(this.root, checkedId(id), 'modpack.json');
   }
 
-  private content(id: string): ContentManager {
-    return new ContentManager(this.instanceDirectory(id), path.join(this.root, id, '.managed-ownership.json'));
+  private async content(id: string): Promise<ContentManager> {
+    const pack = await this.read(id);
+    return new ContentManager(this.instanceDirectory(id), path.join(this.root, id, '.managed-ownership.json'), pack.loader);
   }
 
   public async create(name: string, selection?: ModpackSelection): Promise<ModpackInfo> {
@@ -160,7 +161,7 @@ export class ModpackManager {
 
   public async snapshot(id: string): Promise<LibrarySnapshot> {
     await this.read(id);
-    return this.content(id).snapshot();
+    return (await this.content(id)).snapshot();
   }
 
   public async installFiles(id: string, paths: string[]): Promise<LibraryImportResult> {
@@ -168,21 +169,21 @@ export class ModpackManager {
     if (!Array.isArray(paths) || paths.length > 100 || paths.some((value) => typeof value !== 'string')) {
       throw new Error('Danh sách file không hợp lệ.');
     }
-    const result = await this.content(id).importAuto(paths);
+    const result = await (await this.content(id)).importAuto(paths);
     await this.touch(id);
     return result;
   }
 
   public async toggleFile(id: string, relative: string): Promise<LibrarySnapshot> {
     await this.read(id);
-    const result = await this.content(id).toggle(relative);
+    const result = await (await this.content(id)).toggle(relative);
     await this.touch(id);
     return result;
   }
 
   public async removeFile(id: string, relative: string): Promise<LibrarySnapshot> {
     await this.read(id);
-    const result = await this.content(id).remove(relative);
+    const result = await (await this.content(id)).remove(relative);
     await this.touch(id);
     return result;
   }
