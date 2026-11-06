@@ -258,7 +258,7 @@ $keybindService = Get-Content 'source/src/main/core/KeybindSettingsService.ts' -
 $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 $generator = Get-Content 'source/src/main/core/JvmProfileGenerator.ts' -Raw
 
-if ($appSource -notmatch "currentVersion: '5\.4\.7'") { throw '5.4.8 version metadata missing.' }
+if ($appSource -notmatch "currentVersion: '5\.4\.8'") { throw '5.4.8 version metadata missing.' }
 if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM profile contract regressed.' }
 if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 3072') { throw '3 GB minimum client heap regressed.' }
 if ($main -notmatch 'BESTIARY_LAUNCHER_STARTUP_AUTO_UPDATE_V547' -or $main -notmatch 'appUpdater\?\.checkAndDownload\(\)') { throw 'Launcher startup auto-update contract missing.' }
