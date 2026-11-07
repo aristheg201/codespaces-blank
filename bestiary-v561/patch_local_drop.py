@@ -40,7 +40,7 @@ old = """  function installFiles() {
       setLibrary(result.snapshot);
       const report = result.skipped.map((item) => item.fileName + ': ' + item.reason);
       setMessage('Đã nhập ' + result.imported.length + ' file.');
-      if (report.length) setError(report.join('\\n'));
+      if (report.length) setError(report.join('\n'));
     });
   }
 """
@@ -59,7 +59,7 @@ new = """  // Personal modpack files come exclusively from the player's local ma
         ? 'Đã cài ' + result.imported.length + ' file vào modpack cá nhân.'
         : 'Không có file mới được cài.');
       if (result.skipped.length) {
-        setError(result.skipped.map((item) => item.fileName + ': ' + item.reason).join('\\\\n'));
+        setError(result.skipped.map((item) => item.fileName + ': ' + item.reason).join('\\n'));
       }
     });
   }
