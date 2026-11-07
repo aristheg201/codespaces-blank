@@ -271,7 +271,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Launcher 5.6.0-alpha.1 Windows build failed.' 
 Pop-Location
 
 Write-Host '=== Functional regression: Official keybinds / Lite / personal isolation ==='
-node bestiary-v550/qa-quality.cjs *>&1 | Tee-Object -FilePath 'qa-quality-v560.log'
+node bestiary-v560/qa-quality-v560.cjs *>&1 | Tee-Object -FilePath 'qa-quality-v560.log'
 if ($LASTEXITCODE -ne 0) { throw 'Official policy/performance functional regression failed.' }
 Write-Host '=== Per-instance runtime E2E regression ==='
 node bestiary-v560/qa-runtime-v560.cjs *>&1 | Tee-Object -FilePath 'qa-runtime-v560.log'
