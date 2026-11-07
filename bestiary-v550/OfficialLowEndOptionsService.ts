@@ -22,7 +22,7 @@ const BACKUP_PATH = path.join('.bestiary', 'options-before-low-end.bak');
 
 const LOW: Record<string, string> = {
   renderDistance: '6',
-  simulationDistance: '4',
+  simulationDistance: '5',
   entityDistanceScaling: '0.75',
   particles: '2',
   biomeBlendRadius: '0',
