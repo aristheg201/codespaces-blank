@@ -111,6 +111,26 @@ function updateOption(filename, id, newValue) {
     assert.equal(next.changed, 1);
     assert.equal(parseOptions(options).get('key_mod.phone'), 'key.keyboard.o');
 
+    // First launch: Minecraft rejects options.txt without a 'version' field.
+    const fresh = path.join(root, 'official-first-run');
+    fs.mkdirSync(path.join(fresh, 'config'), { recursive: true });
+    fs.copyFileSync(policyFile, path.join(fresh, 'config', 'bestiary-keybinds.json'));
+    const freshOptions = path.join(fresh, 'options.txt');
+    assert(!fs.existsSync(freshOptions));
+    await new KeybindPolicyService(fresh).apply();
+    let freshValues = parseOptions(freshOptions);
+    assert.equal(freshValues.get('version'), '3955', 'first-run Official file must have Minecraft 1.21.1 data version');
+    assert.equal(freshValues.get('key_key.inventory'), 'key.keyboard.i');
+    await new OfficialLowEndOptionsService(fresh).apply('lite', { systemRamMb: 4096, cpuThreads: 4 });
+    freshValues = parseOptions(freshOptions);
+    assert.equal(freshValues.get('version'), '3955');
+    assert.equal(freshValues.get('simulationDistance'), '5');
+    // Repair a preexisting options.txt that has valid keybinds but lacks version.
+    fs.writeFileSync(freshOptions, 'key_key.inventory:key.keyboard.i\\nkey_key.forward:key.keyboard.k\\n');
+    await new KeybindPolicyService(fresh).apply();
+    assert.equal(parseOptions(freshOptions).get('version'), '3955');
+    console.log('QA PASS: first-run options.txt and missing-version recovery');
+
     const personalManager = new ModpackManager(root);
     const personalPack = await personalManager.create('Personal QA Modpack');
     const personal = personalManager.instanceDirectory(personalPack.id);
