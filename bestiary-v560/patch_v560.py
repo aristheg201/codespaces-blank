@@ -68,8 +68,13 @@ personal = main[start:end]
 old_memory = '''    const personalMemory = planPersonalMemory(settings);'''
 if personal.count(old_memory) != 1:
     raise SystemExit('Personal memory marker mismatch')
-personal = personal.replace(old_memory,
-'''    const personalRuntime = await new PersonalInstanceRuntimeService(directory).prepare(pack, settings);''', 1)
+personal = personal.replace(old_memory, '''''', 1)
+original_directory = '''    const directory = modpackManager.instanceDirectory(id);
+    await fs.ensureDir(directory);'''
+if personal.count(original_directory) != 1:
+    raise SystemExit('Personal instance directory initialization marker missing')
+personal = personal.replace(original_directory, original_directory + '''
+    const personalRuntime = await new PersonalInstanceRuntimeService(directory).prepare(pack, settings);''', 1)
 
 # The original version arithmetic is error-prone for legacy Java and
 # future releases. Mojang's javaVersion.majorVersion now owns the decision.
