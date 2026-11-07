@@ -80,7 +80,7 @@ export class OfficialLowEndOptionsService {
       if (separator > 0) current.set(line.slice(0, separator), line.slice(separator + 1));
     }
     const old = await fs.readJson(stateFile).catch(() => null) as Partial<PerformanceState> | null;
-    const applied = old?.schema === 1 && old.applied && typeof old.applied === 'object'
+    const applied: PerformanceState['applied'] = old?.schema === 1 && old.applied && typeof old.applied === 'object'
       && !Array.isArray(old.applied) ? old.applied : {};
 
     const updates = new Map<string, string>();
