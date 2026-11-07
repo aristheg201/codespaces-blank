@@ -1,0 +1,47 @@
+name: Dump Bestiary Manager Source v7
+
+on:
+  push:
+    branches:
+      - bestiary-manager-v7-rebuild
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts = Get-ChildItem bpm6-src/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
+
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bestiary-manager-source-v7
+          path: manager
+          if-no-files-found: error
+          retention-days: 1
