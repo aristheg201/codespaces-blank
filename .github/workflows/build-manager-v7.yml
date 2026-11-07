@@ -1,0 +1,110 @@
+name: Build Bestiary Pack Manager 7.0.0
+
+on:
+  push:
+    branches:
+      - bestiary-manager-v7
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Pack Manager 6.0.2 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts = Get-ChildItem bpm6-src/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          if ($LASTEXITCODE -ne 0) { throw 'Manager source reconstruction failed.' }
+
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+
+      - name: Apply Pack Manager 7.0.0 overlay
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $parts = Get-ChildItem bestiary-v7/manager-overlay/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Expected 5 v7 overlay chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
+          [IO.File]::WriteAllBytes('manager-v7-overlay.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-v7-overlay.tar.gz -C manager
+          if ($LASTEXITCODE -ne 0) { throw 'Manager v7 overlay extraction failed.' }
+          if ((Get-Content manager/package.json -Raw) -notmatch '"version"\s*:\s*"7\.0\.0"') { throw 'Manager v7 package version was not applied.' }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: manager/package.json
+
+      - name: Install dependencies
+        working-directory: manager
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: manager
+        shell: pwsh
+        run: npm run typecheck
+
+      - name: Build NSIS installer
+        working-directory: manager
+        shell: pwsh
+        run: npm run dist:win
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-7.0.0.exe
+          if ($installer.Length -lt 1000000) { throw "Installer is unexpectedly small: $($installer.Length)" }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          New-Item -ItemType Directory -Force build-output | Out-Null
+          Copy-Item $installer.FullName build-output/BestiaryPackManager-Setup-7.0.0.exe -Force
+          "$hash  BestiaryPackManager-Setup-7.0.0.exe" | Set-Content -Encoding ascii build-output/BestiaryPackManager-Setup-7.0.0-SHA256.txt
+
+      - name: Smoke-test silent install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $proc = Start-Process -FilePath "$PWD/build-output/BestiaryPackManager-Setup-7.0.0.exe" -ArgumentList "/S" -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw "NSIS silent install exited with code $($proc.ExitCode)" }
+          Start-Sleep -Seconds 2
+          $installed = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Filter "Bestiary Pack Manager.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installed) { throw "Installed Pack Manager executable was not found." }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryPackManager-Windows-7.0.0
+          path: |
+            build-output/BestiaryPackManager-Setup-7.0.0.exe
+            build-output/BestiaryPackManager-Setup-7.0.0-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
