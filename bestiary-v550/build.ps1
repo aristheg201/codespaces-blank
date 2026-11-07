@@ -238,6 +238,10 @@ Write-Host '=== Apply 5.5.0 multi-loader creation and launch ==='
 python bestiary-v550/patch_v550.py
 if ($LASTEXITCODE -ne 0) { throw '5.5.0 multi-loader integration failed.' }
 
+Write-Host '=== Apply Official keybind and low-end performance fixes ==='
+python bestiary-v550/patch_quality.py
+if ($LASTEXITCODE -ne 0) { throw 'Official keybind/performance integration patch failed.' }
+
 Push-Location source
 npm install --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
@@ -256,6 +260,10 @@ npm run dist:win
 if ($LASTEXITCODE -ne 0) { throw 'Launcher 5.5.0 Windows build failed.' }
 Pop-Location
 
+Write-Host '=== Functional regression: Official keybinds / Lite / personal isolation ==='
+node bestiary-v550/qa-quality.cjs *>&1 | Tee-Object -FilePath 'qa-quality-v550.log'
+if ($LASTEXITCODE -ne 0) { throw 'Official policy/performance functional regression failed.' }
+
 Write-Host '=== Verify 5.5.0 auto-update contracts ==='
 $main = Get-Content 'source/src/main/index.ts' -Raw
 $ipc = Get-Content 'source/src/shared/ipc.ts' -Raw
@@ -267,13 +275,15 @@ $appSource = Get-Content 'source/src/renderer/src/App.tsx' -Raw
 $generator = Get-Content 'source/src/main/core/JvmProfileGenerator.ts' -Raw
 
 if ($appSource -notmatch "currentVersion: '5\.5\.0'") { throw '5.5.0 version metadata missing.' }
-if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=544'") { throw '5.4.4 JVM profile contract regressed.' }
-if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 3072') { throw '3 GB minimum client heap regressed.' }
+if ($generator -notmatch "GENERATOR_REVISION_ARG = '-Dbestiary.jvm.profile=551'") { throw 'Adaptive JVM profile revision missing.' }
+if ($generator -notmatch 'MIN_CLIENT_HEAP_MB = 1536') { throw 'Physical-RAM heap safety floor regressed.' }
 if ($main -notmatch 'BESTIARY_LAUNCHER_STARTUP_AUTO_UPDATE_V547' -or $main -notmatch 'appUpdater\?\.checkAndDownload\(\)') { throw 'Launcher startup auto-update contract missing.' }
 
 if ($main -notmatch "event\.type === 'state' && event\.state === 'running'" -or $main -notmatch 'mainWindow\.hide\(\)') { throw '5.4.5 auto-hide contract regressed.' }
 if ($main -notmatch "event\.type === 'state' && event\.state === 'stopped'" -or $main -notmatch 'restoreBestiaryWindow\(\);') { throw '5.4.5 restore contract regressed.' }
 if ($main -notmatch "bestiary:keybind-get" -or $main -notmatch "bestiary:keybind-save") { throw 'Keybind IPC handlers missing.' }
+if ([regex]::Matches($main, [regex]::Escape('await keybindPolicyService.apply();')).Count -ne 2) { throw 'Keybind missing from an Official launch path.' }
+if ($main -notmatch 'officialLowEndOptionsService.apply' -or $main -notmatch 'planPersonalMemory') { throw 'Low-end source integration missing.' }
 if ($ipc -notmatch 'interface KeybindEntry' -or $preload -notmatch 'bestiary:keybind-get') { throw 'Keybind bridge missing.' }
 
 if ($content -notmatch "label: 'KEYBINDS'") { throw 'Pack Manager KEYBINDS tab missing.' }
@@ -372,6 +382,12 @@ vanillaAndModdedKeybinds=true
 keybindConflictDetection=true
 keybindLockedPolicyAware=true
 keybindAtomicSave=true
+officialKeybindFirstApply=true
+officialOnlyPolicy=true
+liteHardwareGraphicsPolicy=true
+personalOptionsIsolation=true
+personalHeapGuard=true
+qualityRegressionExecuted=true
 "@ | Set-Content 'build-output-v550/feature-contract.txt' -Encoding ascii
 
 Write-Host "Launcher 5.5.0 SHA256: $hash"
