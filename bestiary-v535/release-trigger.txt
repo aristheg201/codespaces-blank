@@ -1,0 +1,3 @@
+Bestiary Launcher 5.3.5 production release trigger.
+Source flow verified on commit 76821f40467094391b9aba0eedae00e186f3b672.
+UI contract: Home and AccountScreen preserved from 5.3.3.

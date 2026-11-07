@@ -1,0 +1,74 @@
+name: Debug Launcher Current Source
+
+on:
+  push:
+    branches: [bestiary-launcher-v5-1-0]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct full launcher source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python - <<'PY'
+          import base64, pathlib
+          names=['src5-00','src5-01','src5-02','src5-03a','src5-03b','src5-04','src5-05']
+          text=''.join((pathlib.Path('bestiary-build')/n).read_text(encoding='utf-8').strip() for n in names)
+          pathlib.Path('base-source.tar.gz').write_bytes(base64.b64decode(text))
+          PY
+          tar -xzf base-source.tar.gz -C source
+          python - <<'PY'
+          import base64, pathlib, zlib
+          root=pathlib.Path('bestiary-v510/overlay')
+          names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
+          text=''.join((root/n).read_text(encoding='utf-8').strip() for n in names); text += '='*((4-len(text)%4)%4)
+          d=zlib.decompressobj(16+zlib.MAX_WBITS); raw=d.decompress(base64.b64decode(text))
+          allowed=pathlib.Path('source').resolve(); start=0
+          while True:
+              p=raw.find(b'ustar',start)
+              if p<0: break
+              start=p+5; h0=p-257
+              if h0<0 or h0+512>len(raw): continue
+              h=raw[h0:h0+512]
+              name=h[:100].split(b'\0',1)[0].decode('utf-8','replace')
+              prefix=h[345:500].split(b'\0',1)[0].decode('utf-8','replace')
+              if prefix: name=prefix+'/'+name
+              try: size=int(h[124:136].split(b'\0',1)[0].strip() or b'0',8)
+              except: continue
+              data0=h0+512
+              if size<0 or data0+size>len(raw) or not name.startswith('src/'): continue
+              target=(allowed/name).resolve()
+              if allowed not in target.parents: continue
+              target.parent.mkdir(parents=True,exist_ok=True)
+              target.write_bytes(raw[data0:data0+size])
+          PY
+          cp bestiary-v510-final/fixes/ipc.ts source/src/shared/ipc.ts
+          cp bestiary-v510-final/fixes/SettingsStore.ts source/src/main/core/SettingsStore.ts
+          cp bestiary-v510-final/fixes/preload-index.ts source/src/preload/index.ts
+          cp bestiary-v510-final/fixes/App.tsx source/src/renderer/src/App.tsx
+          cp bestiary-v510-final/fixes/Home.tsx source/src/renderer/src/components/Home.tsx
+          cp bestiary-v510-final/fixes/Home.css source/src/renderer/src/components/Home.css
+          cp bestiary-v510-final/fixes/UxPanels.css source/src/renderer/src/components/UxPanels.css
+          cp bestiary-v510-final/fixes/ProfileChooser.tsx source/src/renderer/src/components/ProfileChooser.tsx
+          cp bestiary-v510-final/fixes/SettingsModal.tsx source/src/renderer/src/components/SettingsModal.tsx
+          cp bestiary-v510-final/fixes/AnnouncementModal.tsx source/src/renderer/src/components/AnnouncementModal.tsx
+          cp bestiary-v510-final/fixes/DiscordText.tsx source/src/renderer/src/components/DiscordText.tsx
+          echo '=== current launcher source ==='
+          find source/src -maxdepth 4 -type f | sort
+      - name: Upload current source
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-current-source
+          path: source/src
+          if-no-files-found: error
+          retention-days: 1

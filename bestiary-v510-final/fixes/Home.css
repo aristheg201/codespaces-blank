@@ -1,0 +1,335 @@
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #090909;
+}
+
+body {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.bestiary-home {
+  min-height: 100vh;
+  color: #f4f4f2;
+  background:
+    radial-gradient(circle at 18% 40%, rgba(224, 61, 28, .22), transparent 28%),
+    radial-gradient(circle at 88% 80%, rgba(178, 60, 22, .13), transparent 23%),
+    linear-gradient(135deg, #1b0f0b 0%, #0b0b0c 42%, #0a0a0b 100%);
+  padding: 22px 26px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bestiary-titlebar {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,.09);
+  padding: 0 10px 14px;
+  flex: 0 0 auto;
+}
+
+.bestiary-titlebrand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.title-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff5a29;
+  box-shadow: 0 0 14px rgba(255,90,41,.8);
+}
+
+.bestiary-window-version {
+  color: #777;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.bestiary-layout {
+  flex: 1;
+  min-height: 0;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding-top: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 54px;
+  align-items: center;
+}
+
+.bestiary-primary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bestiary-hero {
+  padding: 0 0 28px 4px;
+}
+
+.bestiary-kicker {
+  color: #ff6336;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .22em;
+  margin-bottom: 24px;
+}
+
+.bestiary-logo {
+  display: block;
+  width: min(390px, 65%);
+  max-height: 180px;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 10px 26px rgba(0,0,0,.42));
+}
+
+.bestiary-subtitle {
+  margin-top: 18px;
+  color: #d2cbc7;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bestiary-statusbar,
+.bestiary-playcard,
+.bestiary-actions button,
+.bestiary-system,
+.bestiary-announcement {
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(39,39,40,.94), rgba(26,26,27,.95));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 16px 34px rgba(0,0,0,.16);
+}
+
+.bestiary-statusbar {
+  min-height: 54px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 22px;
+}
+
+.bestiary-statusbar > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bestiary-statusbar span,
+.bestiary-system dt {
+  color: #98918c;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.bestiary-statusbar strong {
+  color: #ebe0c2;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.bestiary-statusbar > i {
+  height: 24px;
+  width: 1px;
+  background: rgba(255,255,255,.17);
+}
+
+.bestiary-playcard {
+  margin-top: 14px;
+  min-height: 92px;
+  border-radius: 17px;
+  padding: 13px 14px 13px 23px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 225px;
+  align-items: stretch;
+  gap: 20px;
+}
+
+.bestiary-userfield {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.bestiary-userfield span {
+  color: #aaa29e;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.bestiary-userfield input {
+  width: 100%;
+  color: #fff;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.bestiary-play {
+  border: 1px solid rgba(255,178,116,.48);
+  border-radius: 13px;
+  color: white;
+  background: linear-gradient(135deg, #f43f2f, #ff6a35 72%, #f04c2b);
+  box-shadow: 0 0 0 3px rgba(255,80,42,.08), 0 8px 24px rgba(238,64,36,.34), inset 0 1px rgba(255,255,255,.22);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .015em;
+}
+
+.bestiary-play:hover { filter: brightness(1.06); }
+.bestiary-play:disabled { opacity: .62; cursor: default; }
+.play-triangle { margin-right: 10px; font-size: 9px; }
+
+.bestiary-progress {
+  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 13px;
+  background: rgba(17,17,18,.88);
+  padding: 12px 14px;
+}
+
+.progress-copy { display: flex; justify-content: space-between; gap: 18px; font-size: 11px; }
+.progress-copy span, .bestiary-progress small { color: #8e8884; }
+.progress-track { height: 5px; margin: 9px 0 6px; border-radius: 999px; overflow: hidden; background: #252526; }
+.progress-track i { display: block; height: 100%; background: linear-gradient(90deg,#f04a2c,#ff8a49); border-radius: inherit; }
+
+.bestiary-actions {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.bestiary-actions button {
+  min-height: 63px;
+  border-radius: 14px;
+  color: #efefef;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+}
+
+.bestiary-actions button:hover { border-color: rgba(255,97,56,.5); background: #303031; }
+.bestiary-actions b {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #ff693c;
+  background: rgba(255,95,47,.11);
+}
+.bestiary-actions span { display:flex; flex-direction:column; gap:2px; }
+.bestiary-actions strong { font-size: 11px; }
+.bestiary-actions small { color:#8e8985; font-size:9px; }
+
+.bestiary-library-link {
+  width: max-content;
+  margin: 12px 0 0 4px;
+  padding: 0;
+  border: 0;
+  color: #7e7975;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.bestiary-library-link:hover { color: #ff6a3b; }
+
+.bestiary-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bestiary-announcement {
+  min-height: 340px;
+  border-radius: 23px;
+  padding: 23px 22px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bestiary-announcement header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #e7e2df;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .07em;
+}
+.bestiary-announcement header i {
+  width: 9px; height: 9px; border-radius:50%; background:#ff5c32;
+  box-shadow:0 0 15px rgba(255,92,50,.95);
+}
+
+.announcement-body { flex:1; padding-top: 52px; }
+.announcement-body h2 { margin:0 0 16px; font-size:22px; line-height:1.1; font-weight:950; }
+.announcement-body p { margin:0; white-space:pre-line; color:#beb8b4; font-size:11px; line-height:1.65; max-height:90px; overflow:hidden; }
+.bestiary-announcement > button {
+  align-self:flex-start;
+  border:0;
+  background:transparent;
+  color:#ff7650;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.08em;
+  padding:8px 0;
+}
+.bestiary-announcement footer { display:flex; justify-content:space-between; color:#c4beb8; font-size:8px; font-weight:900; letter-spacing:.11em; }
+
+.bestiary-system {
+  border-radius: 19px;
+  padding: 17px 20px;
+}
+.bestiary-system h3 { margin:0 0 9px; padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.1); font-size:10px; letter-spacing:.1em; }
+.bestiary-system dl { margin:0; }
+.bestiary-system dl div { display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
+.bestiary-system dd { margin:0; color:#e7dfc4; font-size:10px; font-weight:900; }
+
+@media (max-width: 1000px), (max-height: 690px) {
+  .bestiary-home { padding: 16px 20px 18px; }
+  .bestiary-layout { padding-top: 24px; grid-template-columns: minmax(0, 1fr) 290px; gap: 28px; }
+  .bestiary-logo { width: 330px; max-height: 135px; }
+  .bestiary-hero { padding-bottom: 18px; }
+  .bestiary-kicker { margin-bottom: 13px; }
+  .bestiary-announcement { min-height: 290px; }
+  .announcement-body { padding-top: 34px; }
+}
+
+@media (max-width: 760px) {
+  html, body, #root { overflow:auto; }
+  .bestiary-home { min-height:100vh; }
+  .bestiary-layout { grid-template-columns:1fr; align-items:start; }
+  .bestiary-rail { display:grid; grid-template-columns:1fr 1fr; }
+  .bestiary-announcement { min-height:240px; }
+}
