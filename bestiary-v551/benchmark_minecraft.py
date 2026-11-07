@@ -134,11 +134,33 @@ def game_process_metrics(handle):
         return 0.0, 0.0
 
 
-def launch_case(name, command_version, game_dir):
+def start_test_server():
+    """Start a real local Minecraft server for reliable in-game join proof."""
+    server_dir = ROOT / "server"
+    server_log = REPORTS / "minecraft-dedicated-server.log"
+    server_log.parent.mkdir(parents=True, exist_ok=True)
+    stdout = server_log.open("w", encoding="utf8")
+    proc = subprocess.Popen(["java", "-Xms512M", "-Xmx2048M", "-jar",
+        "server.jar", "nogui"], cwd=server_dir, stdout=stdout,
+        stderr=subprocess.STDOUT, start_new_session=True)
+    stdout.close()
+    started = time.monotonic()
+    while time.monotonic() - started < 100:
+        if proc.poll() is not None:
+            raise RuntimeError("Real Minecraft test server exited: " + server_log.read_text(encoding="utf8", errors="replace")[-4000:])
+        if server_log.exists() and "Done (" in server_log.read_text(encoding="utf8", errors="replace"):
+            print("Minecraft 1.21.1 dedicated world server ready on localhost:25565", flush=True)
+            return proc, server_log
+        time.sleep(1)
+    proc.terminate()
+    raise RuntimeError("Minecraft 1.21.1 dedicated server not ready in 100 seconds")
+
+
+def launch_case(name, command_version, game_dir, server_log):
     case_dir = REPORTS / name
     case_dir.mkdir(parents=True, exist_ok=True)
     flags = [
-        "--quickPlaySingleplayer", "qa_world",
+        "--quickPlayMultiplayer", "127.0.0.1:25565",
         "--quickPlayPath", "qa/quickplay.log",
         "--width", "1024", "--height", "768",
     ]
@@ -179,15 +201,25 @@ def launch_case(name, command_version, game_dir):
                 if handle.poll() is not None:
                     process_failure = "Minecraft exited " + str(handle.returncode)
                     break
-                if quicklog.exists() and quicklog.stat().st_size:
-                    data = quicklog.read_text(encoding="utf8", errors="replace")
-                    if "singleplayer" in data and "qa_world" in data:
+                # The server is the source of truth: Minecraft must complete
+                # multiplayer login and place our actual test player in-world.
+                # A Java PID or main menu alone never satisfies this gate.
+                if server_log.exists():
+                    server_text = server_log.read_text(encoding="utf8", errors="replace")
+                    if "SVFrameQA551 joined the game" in server_text:
                         joined_at = time.monotonic()
-                        print("QA IN-GAME JOINED:", name, "in", round(joined_at-started, 2), "sec", flush=True)
+                        print("QA IN-GAME SERVER JOIN CONFIRMED:", name,
+                              "in", round(joined_at-started, 2), "sec", flush=True)
                         break
                 time.sleep(2)
             if joined_at is None:
-                raise RuntimeError(process_failure or "Minecraft did not report Quick Play world entry")
+                if shutil.which("import"):
+                    try:
+                        subprocess.run(["import", "-window", "root",
+                            str(case_dir / "failed-world-entry.png")], timeout=15)
+                    except Exception:
+                        pass
+                raise RuntimeError(process_failure or "Minecraft did not join the real benchmark server")
             for step in range(PASS_STABILITY_SECONDS // 2):
                 if handle.poll() is not None:
                     raise RuntimeError("Minecraft terminated after joining world")
@@ -213,7 +245,8 @@ def launch_case(name, command_version, game_dir):
     result = {
         "case": name, "minecraft": MC, "version_id": command_version,
         "renderer": "Mesa llvmpipe (software), Ubuntu Xvfb",
-        "game_joined": bool(joined_at), "stable_30s": survived,
+        "game_joined": bool(joined_at), "server_join_verified": bool(joined_at),
+        "stable_30s": survived,
         "time_to_world_seconds": round(joined_at - started, 2) if joined_at else None,
         "peak_rss_mb": round(max((s["rss_mb"] for s in samples), default=0), 2),
         "rss_samples": samples, "fatal_log_markers": observed,
@@ -259,14 +292,25 @@ def main():
             f.result()
             if idx % 20 == 0 or idx == len(futures):
                 print("Verified real SHA256 objects:", idx, "/", len(futures), flush=True)
-    result = launch_case("SVFrame-Official-Lite", installed, GAME)
+    server_proc, server_log = start_test_server()
+    try:
+        result = launch_case("SVFrame-Official-Lite", installed, GAME, server_log)
+    finally:
+        try:
+            os.killpg(server_proc.pid, signal.SIGTERM)
+            server_proc.wait(timeout=20)
+        except Exception:
+            try:
+                os.killpg(server_proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
     (REPORTS / "report.json").write_text(json.dumps({
         "version": "5.5.1", "distribution": manifest["version"],
         "file_count": len(selected), "profile": PROFILE,
         "test_kind": "real_Minecraft_client_world_load_software_GPU",
         "results": [result]
     }, indent=2), encoding="utf8")
-    print("QA PASS: Full SVFrame Official Lite launched Minecraft 1.21.1 with Mesa, entered world, stable 30s", flush=True)
+    print("QA PASS: Full SVFrame Official Lite launched Minecraft 1.21.1 with Mesa, joined live world server, stable 30s", flush=True)
 
 
 if __name__ == "__main__":
