@@ -170,12 +170,9 @@ export class PersonalInstanceRuntimeService {
     const maxRamMb = overrides.maxRamMb ?? global.maxRamMb;
     const minRamMb = overrides.minRamMb ?? global.minRamMb;
     const budget = planPersonalMemory({ minRamMb, maxRamMb }, hardwareMb);
-    // Preserve Launcher globally configured JVM flags, but per-instance
-    // memory is owned by the instance; never copy Official keybinds/manifest.
-    const args = Array.isArray(global.generatedJvmArgs) ? global.generatedJvmArgs.filter(
-      (item) => typeof item === 'string' && item.length <= 4096 &&
-        !/^-Xm[sx]/u.test(item) && !item.includes('\0')
-    ) : [];
+    // Never inherit Official JVM flags, manager policy, keybinds or
+    // resource settings. Per-instance custom JVM args have their own editor.
+    const args: string[] = [];
     return {
       gameDirectory: this.gameDirectory,
       minecraftVersion: pack.minecraftVersion,
