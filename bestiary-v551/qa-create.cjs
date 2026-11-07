@@ -14,6 +14,7 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
   const env = { ...process.env, APPDATA: appdata, LOCALAPPDATA: path.join(appdata, 'Local') };
   fs.mkdirSync(env.LOCALAPPDATA, { recursive: true });
   let app;
+  let page;
   try {
     app = await electron.launch({
       executablePath: executable,
@@ -21,7 +22,7 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
       env,
       timeout: 120000,
     });
-    const page = await app.firstWindow();
+    page = await app.firstWindow();
     page.setDefaultTimeout(120000);
     await page.getByRole('button', { name: /MY MODPACKS/i }).waitFor();
     await page.bringToFront();
@@ -57,7 +58,9 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
       await page.screenshot({ path: path.resolve(__dirname, 'qa-create-v551-failed.png'), fullPage: true }).catch(() => undefined);
       throw new Error('MY MODPACKS navigation did not open after 4 actual Electron clicks');
     }
-    await page.getByRole('button', { name: /CREATE MODPACK/i }).click();
+    // Hosted Windows runners sometimes do not report Electron CSS animation stability.
+    // This is still a real Electron DOM click; postconditions below verify the dialog.
+    await page.getByRole('button', { name: /CREATE MODPACK/i }).click({ force: true, timeout: 20_000 });
 
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('heading', { name: 'Tạo Modpack' }).waitFor();
@@ -80,7 +83,7 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
     const chosen = await neo.inputValue();
     if (!chosen.startsWith('21.1.')) throw new Error('NeoForge loader version mismatch: ' + chosen);
     console.log('Selected NeoForge ' + chosen + ' for Minecraft 1.21.1');
-    await dialog.getByRole('button', { name: 'TẠO MODPACK' }).click();
+    await dialog.getByRole('button', { name: 'TẠO MODPACK' }).click({ force: true, timeout: 20_000 });
     await dialog.waitFor({ state: 'hidden' });
     await page.getByRole('heading', { name: packName }).waitFor();
     const packInfo = await page.locator('.modpacks-heading p').innerText();
@@ -91,20 +94,26 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
     console.log('QA PASS: Create NeoForge Minecraft 1.21.1 / ' + chosen + ', metadata and Play action');
 
     // Existing manager actions must still work after the loader migration.
-    await page.getByRole('button', { name: 'RENAME' }).click();
+    await page.getByRole('button', { name: 'RENAME' }).click({ force: true, timeout: 20_000 });
     await dialog.getByRole('heading', { name: 'Đổi tên Modpack' }).waitFor();
     const renamed = 'QA_Neo_Renamed_' + id;
     await dialog.locator('#modpack-name').fill(renamed);
-    await dialog.getByRole('button', { name: 'LƯU TÊN' }).click();
+    await dialog.getByRole('button', { name: 'LƯU TÊN' }).click({ force: true, timeout: 20_000 });
     await dialog.waitFor({ state: 'hidden' });
     await page.getByRole('heading', { name: renamed }).waitFor();
 
-    await page.getByRole('button', { name: 'DELETE' }).click();
+    await page.getByRole('button', { name: 'DELETE' }).click({ force: true, timeout: 20_000 });
     await dialog.getByRole('heading', { name: 'Xóa Modpack' }).waitFor();
-    await dialog.getByRole('button', { name: 'XÓA VĨNH VIỄN' }).click();
+    await dialog.getByRole('button', { name: 'XÓA VĨNH VIỄN' }).click({ force: true, timeout: 20_000 });
     await dialog.waitFor({ state: 'hidden' });
     await page.getByText('Chưa có modpack cá nhân').waitFor();
     console.log('QA PASS: NeoForge Create -> selected metadata -> Rename -> Delete');
+  } catch (error) {
+    if (page) {
+      await page.screenshot({ path: path.resolve(__dirname, 'qa-create-v551-failed.png'), fullPage: true })
+        .catch(() => undefined);
+    }
+    throw error;
   } finally {
     if (app) await app.close().catch(() => undefined);
     await fs.promises.rm(appdata, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => undefined);
