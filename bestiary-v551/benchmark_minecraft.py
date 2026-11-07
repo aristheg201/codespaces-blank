@@ -274,6 +274,7 @@ def main():
     (GAME / "options.txt").write_text(
         "version:3955\nrenderDistance:6\nsimulationDistance:5\n"
         "maxFps:60\nparticles:2\ngraphicsMode:0\n"
+        "onboardAccessibility:false\nskipMultiplayerWarning:true\n"
         "key_key.inventory:key.keyboard.i\n",
         encoding="utf8")
     meta = json.loads((GAME / "versions" / MC / (MC + ".json")).read_text(encoding="utf8"))
