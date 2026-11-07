@@ -32,7 +32,7 @@ jobs:
       - name: Prepare Mesa software-OpenGL Minecraft runtime
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri mesa-utils libxi6 libxrandr2 libxcursor1 libxinerama1 libxxf86vm1 libasound2t64
+          sudo apt-get install -y xvfb xauth imagemagick libgl1-mesa-dri mesa-utils libxi6 libxrandr2 libxcursor1 libxinerama1 libxxf86vm1 libasound2t64
           python -m pip install 'minecraft-launcher-lib==8.0' 'psutil>=6,<8'
       - name: Verify software OpenGL profile
         run: |
@@ -149,7 +149,7 @@ jobs:
           import json
           j=json.load(open('release/bench/benchmark-output/report.json', encoding='utf8'))
           assert j['version']=='5.5.1' and j['file_count'] >= 100
-          assert all(x['game_joined'] and x['stable_30s'] and not x['fatal_log_markers'] for x in j['results'])
+          assert all(x['game_joined'] and x['server_join_verified'] and x['stable_30s'] and not x['fatal_log_markers'] for x in j['results'])
           PY
           echo "RELEASE_SHA256=$sha" >> "$GITHUB_ENV"
       - name: Publish immutable 5.5.1 Release
