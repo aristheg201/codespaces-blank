@@ -1,0 +1,79 @@
+name: Bestiary v5.6.0 Alpha - Prism-style Instance Runtime QA
+on:
+  push:
+    branches:
+      - feature/bestiary-prism-runtime-foundation-v560
+    paths:
+      - 'bestiary-v560/**'
+      - '.github/workflows/qa-bestiary-prism-v560.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bestiary-prism-v560-qa
+  cancel-in-progress: true
+
+jobs:
+  runtime-windows:
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reconstruct and test v560 instance runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./bestiary-v560/build.ps1 *>&1 | Tee-Object -FilePath 'ci-v560.log'
+          if ($LASTEXITCODE -ne 0) { throw "v560 runtime build/QA failed." }
+          $contract = Get-Content 'build-output-v560/feature-contract.txt' -Raw
+          if ($contract -notmatch 'version=5.6.0-alpha.1') { throw 'Wrong alpha build version.' }
+          if ($contract -notmatch 'perInstanceRuntimeEditor=true') { throw 'Instance runtime editor not verified.' }
+          if ($contract -notmatch 'officialOnlyPolicy=true') { throw 'Official-only keybind contract missing.' }
+      - name: Upload v560 alpha QA candidate and reports
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-PrismRuntime-v560-ALPHA-QA
+          path: |
+            build-output-v560/BestiaryLauncher-Setup-5.6.0-alpha.1.exe
+            build-output-v560/BestiaryLauncher-Setup-5.6.0-alpha.1-SHA256.txt
+            build-output-v560/feature-contract.txt
+            build-output-v560/qa-quality-v560.log
+            build-output-v560/qa-runtime-v560.log
+            build-output-v560/qa-create-v560.log
+            build-output-v560/qa-neoforge-install-v560.log
+          if-no-files-found: error
+          retention-days: 20
+      - name: Capture failed build and QA artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-PrismRuntime-v560-FAILURE
+          path: |
+            ci-v560.log
+            qa-quality-v560.log
+            qa-runtime-v560.log
+            qa-create-v560.log
+            qa-neoforge-install-v560.log
+          if-no-files-found: ignore
