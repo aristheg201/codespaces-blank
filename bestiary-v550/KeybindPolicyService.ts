@@ -115,7 +115,8 @@ export class KeybindPolicyService {
       applied[rule.id] = { policyValue: rule.key, observedValue: rule.key, mode: rule.mode };
     }
 
-    if (changed) {
+    const needsVersion = !parsed.lines.some((line) => /^version:[0-9]+$/u.test(line));
+    if (changed || needsVersion) {
       const seen = new Set<string>();
       const lines = parsed.lines.map((line) => {
         const at = line.indexOf(':');
@@ -127,6 +128,13 @@ export class KeybindPolicyService {
       });
       for (const [id, value] of replacements) {
         if (!seen.has(id)) lines.push(id + ':' + value);
+      }
+      // The Minecraft client discards options.txt entirely if 'version' is
+      // missing. Official SVFrame is pinned to Minecraft 1.21.1 (data 3955).
+      if (needsVersion) {
+        const bad = lines.findIndex((line) => line.startsWith('version:'));
+        if (bad >= 0) lines[bad] = 'version:3955';
+        else lines.unshift('version:3955');
       }
 
       // Never overwrite unrelated Minecraft graphics, audio, accessibility,

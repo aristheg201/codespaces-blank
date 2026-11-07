@@ -97,7 +97,8 @@ export class OfficialLowEndOptionsService {
       applied[id] = value;
     }
 
-    if (updates.size) {
+    const needsVersion = !lines.some((line) => /^version:[0-9]+$/u.test(line));
+    if (updates.size || needsVersion) {
       const seen = new Set<string>();
       const next = lines.map((line) => {
         const at = line.indexOf(':');
@@ -108,6 +109,11 @@ export class OfficialLowEndOptionsService {
         return id + ':' + value;
       });
       for (const [id, value] of updates) if (!seen.has(id)) next.push(id + ':' + value);
+      if (needsVersion) {
+        const bad = next.findIndex((line) => line.startsWith('version:'));
+        if (bad >= 0) next[bad] = 'version:3955';
+        else next.unshift('version:3955');
+      }
       await fs.ensureDir(path.dirname(stateFile));
       const backupFile = path.join(this.officialGameDirectory, BACKUP_PATH);
       if (exists && !(await fs.pathExists(backupFile))) await fs.copyFile(optionsFile, backupFile);
