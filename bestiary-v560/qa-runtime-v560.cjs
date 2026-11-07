@@ -80,7 +80,7 @@ function createLocalVersion(gameRoot, version, javaMajor) {
     assert.equal(knownJavaMajor('1.20.5'), 21);
     assert.equal(knownJavaMajor('1.21.1'), 21);
     assert.throws(() => knownJavaMajor('../escape'), /không hợp lệ/u);
-    assert.throws(() => normalizePersonalRuntimeSettings({schema:1}), /không hợp lệ/u);
+    assert.throws(() => normalizePersonalRuntimeSettings({schema:1}), /Java\/RAM/u);
     await a.save(defaults);
     const untouched = fs.readFileSync(firstOptions, 'utf8');
     assert.equal(untouched, 'version:3955\nkey_key.forward:key.keyboard.j\n');
