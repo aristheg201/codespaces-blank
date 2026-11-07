@@ -342,7 +342,7 @@ Push-Location source
 npm install --no-save playwright-core@1.56.1 --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Playwright Electron UI test dependency installation failed.' }
 Pop-Location
-node bestiary-v550/qa-create.cjs *>&1 | Tee-Object -FilePath 'qa-create-v551.log'
+node bestiary-v551/qa-create.cjs *>&1 | Tee-Object -FilePath 'qa-create-v551.log'
 if ($LASTEXITCODE -ne 0) { throw 'Electron UI Create/Rename/Delete QA failed.' }
 
 Write-Host '=== NeoForge 1.21.1 REAL installer integration QA ==='
