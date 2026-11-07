@@ -1,0 +1,88 @@
+name: Bestiary Launcher 5.5.1 - publish verified CI artifacts
+on:
+  push:
+    branches: [release/bestiary-launcher-v5.5.1-game-benchmark]
+    paths: ['.github/workflows/publish-bestiary-v551-verified.yml']
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: bestiary-v551-verified-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '42351546154'
+      SOURCE_SHA: '32798658adc6cd40bfef47633c8452c48d0588da'
+      TAG: launcher-v5.5.1
+      EXE: BestiaryLauncher-Setup-5.5.1.exe
+    steps:
+      - name: Confirm source run has both independently passing QA jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)"
+          test "$run_sha" = "$SOURCE_SHA"
+          passing="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" \
+            --jq '[.jobs[] | select((.name=="build-windows" or .name=="minecraft-game-benchmark") and .conclusion=="success")] | length')"
+          test "$passing" = "2"
+          echo 'QA GATE PASS: Windows and real Minecraft game in-world benchmark succeeded.'
+      - name: Download and verify immutable QA artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/installer release/bench
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name BestiaryLauncher-Windows-5.5.1-CANDIDATE --dir release/installer
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name SVFrame-551-Minecraft-Real-World-Benchmark --dir release/bench
+          hash="$(sha256sum "release/installer/$EXE" | cut -d' ' -f1)"
+          expected="$(tr -d '\r' < release/installer/BestiaryLauncher-Setup-5.5.1-SHA256.txt | awk 'NR==1 {print tolower($1)}')"
+          test "$hash" = "$expected"
+          grep -Fx 'version=5.5.1' <(tr -d '\r' < release/installer/feature-contract.txt)
+          grep -Fx 'officialOnlyPolicy=true' <(tr -d '\r' < release/installer/feature-contract.txt)
+          grep -F 'QA PASS: first-run options.txt and missing-version recovery' release/installer/qa-quality-v551.log
+          grep -F 'QA PASS: Manager -> SVFrame Official options.txt' release/installer/qa-quality-v551.log
+          grep -F 'QA PASS: NeoForge Create -> selected metadata -> Rename -> Delete' release/installer/qa-create-v551.log
+          grep -F 'QA PASS: Full SVFrame Official Lite launched Minecraft' release/bench/minecraft-benchmark.log
+          python3 - <<'PY'
+          import json
+          j=json.load(open('release/bench/benchmark-output/report.json', encoding='utf-8'))
+          assert j['version']=='5.5.1' and j['file_count']==136
+          assert len(j['results'])>0
+          for result in j['results']:
+              assert result['game_joined'] and result['server_join_verified'] and result['stable_30s']
+              assert not result['fatal_log_markers']
+              assert result['time_to_world_seconds'] > 0
+          PY
+          echo "RELEASE_SHA256=$hash" >> "$GITHUB_ENV"
+          echo "RELEASE_BYTES=$(stat -c%s "release/installer/$EXE")" >> "$GITHUB_ENV"
+          echo "VERIFIED_WINDOWS_INSTALLER=$hash"
+      - name: Publish immutable GitHub Release after verified gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Tag already exists; will not overwrite a published release.' >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            "release/installer/$EXE" \
+            release/installer/BestiaryLauncher-Setup-5.5.1-SHA256.txt \
+            release/bench/benchmark-output/report.json#SVFrame-5.5.1-Minecraft-Benchmark.json \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+            --title 'Bestiary Launcher 5.5.1 - Official Keybind and Lite Performance' \
+            --notes 'Bestiary Launcher 5.5.1 fixes Manager keybind distribution ONLY for SVFrame Official, preserves independent player modpack settings, and improves Lite RAM/graphics defaults. GitHub CI verified Windows Electron CRUD/NeoForge and Minecraft 1.21.1 Fabric with all 136 Lite content objects, actual server world entry and a stable run. CPU Mesa llvmpipe is not representative low-end GPU FPS. Auto-updater manifest updated separately.'
+          mkdir -p verification
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXE" --dir verification
+          actual="$(sha256sum "verification/$EXE" | cut -d' ' -f1)"
+          test "$actual" = "$RELEASE_SHA256"
+          echo "RELEASE PASS sha256=$actual bytes=$RELEASE_BYTES"
