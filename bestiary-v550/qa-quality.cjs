@@ -126,7 +126,7 @@ function updateOption(filename, id, newValue) {
     assert.equal(freshValues.get('version'), '3955');
     assert.equal(freshValues.get('simulationDistance'), '5');
     // Repair a preexisting options.txt that has valid keybinds but lacks version.
-    fs.writeFileSync(freshOptions, 'key_key.inventory:key.keyboard.i\\nkey_key.forward:key.keyboard.k\\n');
+    fs.writeFileSync(freshOptions, 'key_key.inventory:key.keyboard.i\nkey_key.forward:key.keyboard.k\n');
     await new KeybindPolicyService(fresh).apply();
     assert.equal(parseOptions(freshOptions).get('version'), '3955');
     console.log('QA PASS: first-run options.txt and missing-version recovery');
