@@ -1,0 +1,172 @@
+name: Bestiary Launcher 5.5.1 - real Minecraft QA, benchmark and gated release
+
+on:
+  push:
+    branches: [release/bestiary-launcher-v5.5.1-game-benchmark]
+    paths:
+      - 'bestiary-v551/**'
+      - '.github/workflows/release-bestiary-launcher-v551.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: bestiary-v551-release
+  cancel-in-progress: false
+
+jobs:
+  minecraft-game-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare Mesa software-OpenGL Minecraft runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri mesa-utils libxi6 libxrandr2 libxcursor1 libxinerama1 libxxf86vm1 libasound2t64
+          python -m pip install 'minecraft-launcher-lib==8.0' 'psutil>=6,<8'
+      - name: Verify software OpenGL profile
+        run: |
+          xvfb-run -a -s '-screen 0 1280x800x24' env LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=4.5 GALLIUM_DRIVER=llvmpipe glxinfo -B | tee mesa-opengl.txt
+          grep -qi 'llvmpipe' mesa-opengl.txt
+      - name: Install genuine Fabric Minecraft, verify all Lite objects and enter test world
+        env:
+          BENCH_ROOT: ${{ runner.temp }}/svframe-551-benchmark
+          BENCH_REPORT: benchmark-output
+          BENCH_PROFILE: lite
+        run: |
+          mkdir -p benchmark-output
+          timeout 55m xvfb-run -a -s '-screen 0 1280x800x24' python bestiary-v551/benchmark_minecraft.py 2>&1 | tee minecraft-benchmark.log
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -F 'QA PASS: Full SVFrame Official Lite launched Minecraft' minecraft-benchmark.log
+      - name: Preserve benchmark metrics and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SVFrame-551-Minecraft-Real-World-Benchmark
+          path: |
+            benchmark-output/
+            minecraft-benchmark.log
+            mesa-opengl.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and QA Windows Launcher 5.5.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./bestiary-v551/build.ps1 *>&1 | Tee-Object -FilePath 'ci-v551.log'
+          if ($LASTEXITCODE -ne 0) { throw 'Launcher 5.5.1 CI failure' }
+          $feature = Get-Content 'build-output-v551/feature-contract.txt' -Raw
+          if ($feature -notmatch 'version=5.5.1') { throw 'Wrong build version' }
+          if ($feature -notmatch 'officialOnlyPolicy=true') { throw 'Personal modpack keybind isolation lost' }
+      - name: Upload QA-verified 5.5.1 Windows installer
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.5.1-CANDIDATE
+          path: |
+            build-output-v551/BestiaryLauncher-Setup-5.5.1.exe
+            build-output-v551/BestiaryLauncher-Setup-5.5.1-SHA256.txt
+            build-output-v551/feature-contract.txt
+            build-output-v551/qa-quality-v551.log
+            build-output-v551/qa-create-v551.log
+            build-output-v551/qa-neoforge-install-v551.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-551-Windows-Failure
+          path: |
+            ci-v551.log
+            qa-quality-v551.log
+            qa-create-v551.log
+            qa-neoforge-install-v551.log
+          if-no-files-found: ignore
+
+  publish:
+    needs: [build-windows, minecraft-game-benchmark]
+    if: ${{ needs.build-windows.result == 'success' && needs.minecraft-game-benchmark.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: launcher-v5.5.1
+      EXE: BestiaryLauncher-Setup-5.5.1.exe
+    steps:
+      - name: Download exact current-run artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/installer release/bench
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name BestiaryLauncher-Windows-5.5.1-CANDIDATE --dir release/installer
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name SVFrame-551-Minecraft-Real-World-Benchmark --dir release/bench
+          sha="$(sha256sum "release/installer/$EXE" | awk '{print $1}')"
+          expected="$(head -1 release/installer/BestiaryLauncher-Setup-5.5.1-SHA256.txt | awk '{print tolower($1)}')"
+          test "$sha" = "$expected"
+          grep -Fx 'version=5.5.1' release/installer/feature-contract.txt
+          grep -Fx 'officialOnlyPolicy=true' release/installer/feature-contract.txt
+          grep -F 'QA PASS: first-run options.txt and missing-version recovery' release/installer/qa-quality-v551.log
+          grep -F 'QA PASS: Manager -> SVFrame Official options.txt' release/installer/qa-quality-v551.log
+          grep -F 'QA PASS: NeoForge Create -> selected metadata -> Rename -> Delete' release/installer/qa-create-v551.log
+          grep -F 'QA PASS: Full SVFrame Official Lite launched Minecraft' release/bench/minecraft-benchmark.log
+          python3 - <<'PY'
+          import json
+          j=json.load(open('release/bench/benchmark-output/report.json', encoding='utf8'))
+          assert j['version']=='5.5.1' and j['file_count'] >= 100
+          assert all(x['game_joined'] and x['stable_30s'] and not x['fatal_log_markers'] for x in j['results'])
+          PY
+          echo "RELEASE_SHA256=$sha" >> "$GITHUB_ENV"
+      - name: Publish immutable 5.5.1 Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release tag already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            "release/installer/$EXE" \
+            release/installer/BestiaryLauncher-Setup-5.5.1-SHA256.txt \
+            release/bench/benchmark-output/report.json#SVFrame-5.5.1-Minecraft-Benchmark.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'Bestiary Launcher 5.5.1 - Official Keybind and Lite Performance' \
+            --notes 'Fix Manager keybind distribution for SVFrame Official only; personal modpacks keep their own options.txt and player controls. Improve Lite settings and hardware RAM caps. QA: Windows Electron, NeoForge 1.21.1 and REAL Minecraft 1.21.1 Fabric SVFrame Lite quick-play world entry with Mesa software OpenGL. Benchmarked startup and memory; no representative hardware FPS claim. Auto-updater manifest is maintained in bestiary-distribution separately.' \
+            --latest
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[] | select(.name == "BestiaryLauncher-Setup-5.5.1.exe") | .digest' | grep -Fx "sha256:$RELEASE_SHA256"
+          echo "RELEASE_PASS=$RELEASE_SHA256"
