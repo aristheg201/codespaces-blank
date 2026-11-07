@@ -2,7 +2,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'fs-extra';
 import axios from 'axios';
-import type { LauncherSettings, ModpackInfo } from '../../shared/ipc';
+import type { LauncherSettings, ModpackInfo, ModpackRuntimeSettings } from '../../shared/ipc';
 import { validateModpackSelection } from './LoaderCatalog';
 import { planPersonalMemory } from './PersonalMemory';
 
@@ -12,12 +12,7 @@ import { planPersonalMemory } from './PersonalMemory';
  * Prism source. Official SVFrame configuration is NEVER read or modified here.
  */
 export type ManagedJavaMajor = 8 | 17 | 21 | 25;
-export interface PersonalInstanceRuntimeSettings {
-  schema: 1;
-  javaMajor: ManagedJavaMajor | null;
-  minRamMb: number | null;
-  maxRamMb: number | null;
-}
+export type PersonalInstanceRuntimeSettings = ModpackRuntimeSettings;
 export interface PersonalRuntimePlan {
   gameDirectory: string;
   minecraftVersion: string;
