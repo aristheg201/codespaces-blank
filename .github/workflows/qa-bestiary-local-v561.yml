@@ -1,0 +1,93 @@
+name: Bestiary v5.6.1 Alpha - local mod drag/drop and unchanged auth QA
+
+on:
+  push:
+    branches: [feature/bestiary-v561-local-dragdrop-preserve-auth]
+    paths:
+      - 'bestiary-v561/**'
+      - '.github/workflows/qa-bestiary-local-v561.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bestiary-local-v561
+  cancel-in-progress: true
+
+jobs:
+  local-content-windows:
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and E2E test native file import, instance isolation and auth
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./bestiary-v561/build.ps1 *>&1 | Tee-Object -FilePath 'ci-v561.log'
+          if ($LASTEXITCODE -ne 0) { throw 'v561 local import/auth QA failed.' }
+          $contract = Get-Content 'build-output-v561/feature-contract.txt' -Raw
+          foreach ($flag in @(
+            'version=5.6.1-alpha.1',
+            'officialOnlyPolicy=true',
+            'localDragDropOnly=true',
+            'noCurseForgeModDownloads=true',
+            'offlineAuthPreserved=true',
+            'microsoftAuthPreserved=true'
+          )) {
+            if (-not $contract.Contains($flag)) { throw "QA feature contract missing: $flag" }
+          }
+          $qa = Get-Content 'build-output-v561/qa-local-v561.log' -Raw
+          if (-not $qa.Contains('QA PASS: manual local JAR/ZIP install')) { throw 'Local import regression not verified.' }
+          $ui = Get-Content 'build-output-v561/qa-create-v561.log' -Raw
+          if (-not $ui.Contains('QA PASS: Native local JAR file picker')) { throw 'Electron local import E2E not verified.' }
+      - name: Upload v561 alpha installer and QA evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-LocalModDrop-v561-ALPHA-QA
+          path: |
+            build-output-v561/BestiaryLauncher-Setup-5.6.1-alpha.1.exe
+            build-output-v561/BestiaryLauncher-Setup-5.6.1-alpha.1-SHA256.txt
+            build-output-v561/feature-contract.txt
+            build-output-v561/qa-quality-v561.log
+            build-output-v561/qa-runtime-v561.log
+            build-output-v561/qa-local-v561.log
+            build-output-v561/qa-create-v561.log
+            build-output-v561/qa-neoforge-install-v561.log
+          if-no-files-found: error
+          retention-days: 20
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-LocalModDrop-v561-FAILURE
+          path: |
+            ci-v561.log
+            qa-local-v561.log
+            qa-create-v561.log
+            qa-quality-v561.log
+            qa-runtime-v561.log
+            qa-neoforge-install-v561.log
+            bestiary-v561/qa-create-v551-failed.png
+          if-no-files-found: ignore
