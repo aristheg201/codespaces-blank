@@ -114,7 +114,13 @@ new = """  // Personal modpack files come exclusively from the player's local ma
     if (canDrop) setDragging(true);
   }
 """
-replace_once(ui, old, new)
+ui_file = root / ui
+ui_source = ui_file.read_text(encoding="utf8")
+start = ui_source.index("  function installFiles() {")
+end = ui_source.index("  function updateItem(", start)
+if end <= start or end - start > 1500:
+    raise SystemExit("[V561] unsafe installFiles region, refusing rewrite")
+ui_file.write_text(ui_source[:start] + new + ui_source[end:], encoding="utf8")
 
 replace_once(ui,
     """  return <main className="modpacks-screen">""",
