@@ -43,8 +43,7 @@ patch_once('src/preload/index.ts',
 
 patch_once('src/main/index.ts',
 '''import { planPersonalMemory } from './core/PersonalMemory';''',
-'''import { planPersonalMemory } from './core/PersonalMemory';
-import { PersonalInstanceRuntimeService } from './core/PersonalInstanceRuntimeService';''')
+'''import { PersonalInstanceRuntimeService } from './core/PersonalInstanceRuntimeService';''')
 
 patch_once('src/main/index.ts',
 '''  ipcMain.handle('bestiary:modpacks-play', (_event, id: string) => startPersonalModpack(id));''',
