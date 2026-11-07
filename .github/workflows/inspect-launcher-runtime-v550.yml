@@ -1,0 +1,45 @@
+name: Inspect launcher runtime adapter for NeoForge 5.5.0
+on:
+  push:
+    branches: [feature/bestiary-launcher-multiloader-v550]
+    paths:
+      - .github/workflows/inspect-launcher-runtime-v550.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print Launcher.ts and original runtime API from reconstructed source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import io, tarfile, base64, gzip, zlib, pathlib
+          base_names=['src5-00','src5-01','src5-02','src5-03a','src5-03b','src5-04','src5-05']
+          base_data=base64.b64decode(''.join((pathlib.Path('bestiary-build')/p).read_text().strip() for p in base_names))
+          overlay_names=['part-00.txt','part-01.txt','part-02.txt','part-03.txt','part-04.txt']
+          over_data=base64.b64decode(''.join((pathlib.Path('bestiary-v510/overlay')/p).read_text().strip() for p in overlay_names))
+          names=['src/main/core/Launcher.ts','src/main/core/JreManager.ts','src/main/index.ts','src/main/core/FabricInstaller.ts']
+          sources={}
+          for label,data in [('base',base_data)]:
+            with tarfile.open(fileobj=io.BytesIO(gzip.decompress(data) if label=='base' else zlib.decompressobj(16+zlib.MAX_WBITS).decompress(data)),mode='r:') as archive:
+              available={item.name:item for item in archive if item.isfile()}
+              print('TAR members total:',len(available),' sample:',list(available)[:25])
+              for name in names:
+                candidates=[k for k in available if k.endswith(name)]
+                if candidates:
+                  sources[name]=(label,archive.extractfile(available[candidates[0]]).read().decode('utf-8'))
+          for name in names:
+            if name not in sources: continue
+            label,value=sources[name]
+            print('\n'+'='*30+' '+name+' from '+label+' '+'='*30)
+            if name.endswith('/index.ts'):
+              lines=value.splitlines()
+              for i,line in enumerate(lines):
+                if 'minecraftLauncher.launch(' in line or 'async function startGame(' in line:
+                  print('\n'.join(f'{j+1}: {lines[j]}' for j in range(max(i-8,0),min(i+40,len(lines)))))
+            else:
+              print('\n'.join(f'{i+1}: {line}' for i,line in enumerate(value.splitlines()[:450])))
+          PY
