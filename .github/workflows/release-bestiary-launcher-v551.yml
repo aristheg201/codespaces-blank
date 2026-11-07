@@ -116,6 +116,7 @@ jobs:
             ci-v551.log
             qa-quality-v551.log
             qa-create-v551.log
+            bestiary-v551/qa-create-v551-failed.png
             qa-neoforge-install-v551.log
           if-no-files-found: ignore
 
