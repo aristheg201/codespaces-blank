@@ -1,0 +1,181 @@
+name: Build Bestiary Pack Manager 6.2.0 Windows
+
+on:
+  push:
+    branches: [bestiary-manager-v7-final]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Reconstruct Manager 6.2.0 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force manager | Out-Null
+          $parts = Get-ChildItem bpm6-src/part-*.txt | Sort-Object Name
+          if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('manager-src.tar.gz', [Convert]::FromBase64String($b64))
+          tar -xzf manager-src.tar.gz -C manager
+          if (-not (Test-Path manager/package.json)) { throw 'Manager source reconstruction failed.' }
+
+          Copy-Item authfix-src/package.json manager/package.json -Force
+          Copy-Item authfix-src/electron-builder.json manager/electron-builder.json -Force
+          Copy-Item authfix-src/src/shared/types.ts manager/src/shared/types.ts -Force
+          Copy-Item authfix-src/src/preload/index.ts manager/src/preload/index.ts -Force
+          Copy-Item authfix-src/src/main/index.ts manager/src/main/index.ts -Force
+          Copy-Item authfix-src/src/renderer/src/store.ts manager/src/renderer/src/store.ts -Force
+          node authfix-src/patch-auth.cjs
+          node patch-v602.cjs
+          node patch-v603.cjs
+          node patch-v604.cjs
+
+          Copy-Item manager-v606/store.ts manager/src/renderer/src/store.ts -Force
+          Copy-Item manager-v606/App.tsx manager/src/renderer/src/App.tsx -Force
+          Copy-Item manager-v606/WorkspaceService.ts manager/src/main/services/WorkspaceService.ts -Force
+          Copy-Item manager-v610/types.ts manager/src/shared/types.ts -Force
+          Copy-Item manager-v610/preload-index.ts manager/src/preload/index.ts -Force
+          Copy-Item manager-v610/AppUpdater.ts manager/src/main/services/AppUpdater.ts -Force
+          node patch-v605.cjs
+          node patch-v606.cjs
+          node manager-v606/patch-main.cjs
+          node manager-v610/patch-main.cjs
+          node manager-v610/patch-ui.cjs
+          node manager-v620/patch-v620.cjs
+
+          $pkg = Get-Content manager/package.json -Raw | ConvertFrom-Json
+          $pkg.version = '6.2.0'
+          $pkg.author = 'SVFrame Team Studio'
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content manager/package.json -Encoding UTF8
+
+          New-Item -ItemType Directory -Force manager/src/renderer/public | Out-Null
+          Copy-Item manager/resources/logo.png manager/src/renderer/public/logo.png -Force
+          New-Item -ItemType Directory -Force manager/resources/gh | Out-Null
+          Copy-Item (Get-Command gh).Source manager/resources/gh/gh.exe -Force
+
+          New-Item -ItemType Directory -Force manager/build | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $source = [System.Drawing.Image]::FromFile((Resolve-Path 'manager/resources/logo.png'))
+          try {
+            $bitmap = New-Object System.Drawing.Bitmap 512, 512
+            try {
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              try {
+                $graphics.Clear([System.Drawing.Color]::Transparent)
+                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $scale = [Math]::Min(440.0 / $source.Width, 440.0 / $source.Height)
+                $w = [int]($source.Width * $scale)
+                $h = [int]($source.Height * $scale)
+                $graphics.DrawImage($source, [int]((512-$w)/2), [int]((512-$h)/2), $w, $h)
+              } finally { $graphics.Dispose() }
+              $bitmap.Save((Join-Path (Resolve-Path 'manager/build').Path 'icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+            } finally { $bitmap.Dispose() }
+          } finally { $source.Dispose() }
+
+      - name: Verify ZIP profiles, updater, Microsoft config, and runtime contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = Get-Content manager/src/renderer/src/App.tsx -Raw
+          $types = Get-Content manager/src/shared/types.ts -Raw
+          $workspace = Get-Content manager/src/main/services/WorkspaceService.ts -Raw
+          $service = Get-Content manager/src/main/services/GithubDistributionService.ts -Raw
+          $settings = Get-Content manager/src/main/services/SettingsService.ts -Raw
+          $main = Get-Content manager/src/main/index.ts -Raw
+          $updater = Get-Content manager/src/main/services/AppUpdater.ts -Raw
+          if ($app -notmatch 'mods-full\.zip' -or $app -notmatch 'mods-pc-lite\.zip' -or $app -notmatch 'mods-android\.zip') { throw 'Three-package import UX is missing.' }
+          if ($app -notmatch 'UP-TO-DATE' -or $app -notmatch 'UPDATE' -or $app -notmatch 'CHANGED') { throw 'Import status UX is missing.' }
+          if ($types -notmatch "'android'" -or $types -notmatch 'importModPackages') { throw 'Android/package API types are missing.' }
+          if ($workspace -notmatch 'stagePackageArchives' -or $workspace -notmatch "'up_to_date'" -or $workspace -notmatch 'sha256') { throw 'ZIP package comparison engine is missing.' }
+          if ($main -notmatch 'packages:choose' -or $main -notmatch 'stage:packages') { throw 'ZIP package IPC is missing.' }
+          if ($service -notmatch "profile === 'android'" -or $service -notmatch "includes\('android'\)") { throw 'Android manifest profile publishing is missing.' }
+          if ($service -notmatch 'profiles: manifestProfiles\.get') { throw 'Per-file profile publishing was lost.' }
+          if ($service -notmatch 'loaderVersion: this\.settings\.fabricLoaderVersion') { throw 'Pinned Fabric runtime contract was lost.' }
+          if ($types -notmatch 'microsoftClientId' -or $settings -notmatch 'microsoftClientId' -or $service -notmatch 'microsoftClientId: this\.settings\.microsoftClientId\.trim' -or $app -notmatch 'MICROSOFT CLIENT ID') { throw 'Microsoft public-client distribution configuration is incomplete.' }
+          if ($app -match 'client secret' -and $app -notmatch 'Không nhập client secret') { throw 'Manager UI must never request a Microsoft client secret.' }
+          if ($types -notmatch 'AppUpdateState' -or $main -notmatch 'app-update:check' -or $updater -notmatch 'sha256' -or $app -notmatch 'CẬP NHẬT & KHỞI ĐỘNG LẠI') { throw 'Manager auto updater contract is incomplete.' }
+          Write-Host 'Manager 6.2.0 ZIP/profile/updater/Microsoft/runtime contracts verified.'
+
+      - name: Install dependencies
+        working-directory: manager
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: manager
+        run: npm run typecheck
+
+      - name: Build NSIS installer
+        working-directory: manager
+        run: npm run dist:win
+
+      - name: Runtime smoke test and hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-Item manager/release/BestiaryPackManager-Setup-6.2.0.exe -ErrorAction Stop
+          $unpacked = Resolve-Path manager/release/win-unpacked
+          $exe = Get-Item (Join-Path $unpacked 'Bestiary Pack Manager.exe') -ErrorAction Stop
+          if ($installer.Length -lt 1000000) { throw "Installer unexpectedly small: $($installer.Length)" }
+          if (-not (Test-Path (Join-Path $unpacked 'resources/app.asar'))) { throw 'Manager runtime missing app.asar.' }
+          $stdout = "$PWD/manager-smoke-stdout.log"
+          $stderr = "$PWD/manager-smoke-stderr.log"
+          $env:ELECTRON_ENABLE_LOGGING = '1'
+          $proc = Start-Process -FilePath $exe.FullName -WorkingDirectory $unpacked -ArgumentList @('--enable-logging','--disable-gpu') -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          Start-Sleep -Seconds 12
+          if ($proc.HasExited) {
+            if (Test-Path $stdout) { Get-Content $stdout -Tail 200 }
+            if (Test-Path $stderr) { Get-Content $stderr -Tail 200 }
+            throw "Manager exited during smoke test: $($proc.ExitCode)"
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          Get-Process | Where-Object { $_.ProcessName -like 'Bestiary*' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt -Encoding ascii
+          Copy-Item $stdout manager/release/manager-smoke-stdout.log -Force -ErrorAction SilentlyContinue
+          Copy-Item $stderr manager/release/manager-smoke-stderr.log -Force -ErrorAction SilentlyContinue
+          Write-Host "Manager SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryPackManager-Windows-6.2.0
+          path: |
+            manager/release/BestiaryPackManager-Setup-6.2.0.exe
+            manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt
+            manager/release/manager-smoke-stdout.log
+            manager/release/manager-smoke-stderr.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish durable Manager release assets
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'manager-v6.2.0'
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title 'Bestiary Pack Manager 6.2.0' --notes 'Adds Microsoft Entra public client ID publishing for Bestiary Launcher premium authentication.'
+          }
+          gh release upload $tag manager/release/BestiaryPackManager-Setup-6.2.0.exe manager/release/BestiaryPackManager-Setup-6.2.0-SHA256.txt --clobber
