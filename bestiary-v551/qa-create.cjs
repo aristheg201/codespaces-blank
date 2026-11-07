@@ -72,14 +72,14 @@ if (!fs.existsSync(executable)) throw new Error('Packaged Bestiary Launcher EXE 
     await page.waitForFunction(() => {
       const select = document.querySelector('#create-minecraft-version');
       return select && !select.disabled && [...select.options].some((item) => item.value === '1.21.1');
-    }, { timeout: 100000 });
+    }, undefined, { polling: 250, timeout: 100000 });
     await minecraft.selectOption('1.21.1');
     await dialog.locator('#create-loader').selectOption('neoforge');
     const neo = dialog.locator('#create-loader-version');
     await page.waitForFunction(() => {
       const select = document.querySelector('#create-loader-version');
       return select && !select.disabled && [...select.options].some((item) => item.value.startsWith('21.1.'));
-    }, { timeout: 100000 });
+    }, undefined, { polling: 250, timeout: 100000 });
     const chosen = await neo.inputValue();
     if (!chosen.startsWith('21.1.')) throw new Error('NeoForge loader version mismatch: ' + chosen);
     console.log('Selected NeoForge ' + chosen + ' for Minecraft 1.21.1');
