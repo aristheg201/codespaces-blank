@@ -131,7 +131,7 @@ function updateOption(filename, id, newValue) {
     assert.equal(perf.tier, 'low');
     values = parseOptions(options);
     assert.equal(values.get('renderDistance'), '6');
-    assert.equal(values.get('simulationDistance'), '4');
+    assert.equal(values.get('simulationDistance'), '5');
     assert.equal(values.get('particles'), '2');
     assert.equal(values.get('resourcePacks'), '["vanilla","file/custom.zip"]');
     assert.equal(values.get('masterVolume'), '0.4');
