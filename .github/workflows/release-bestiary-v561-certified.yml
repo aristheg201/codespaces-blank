@@ -1,0 +1,202 @@
+name: Bestiary Launcher 5.6.1 - certified Windows and in-game local mod release
+on:
+  push:
+    branches: [release/bestiary-launcher-v5.6.1-certified]
+    paths:
+      - 'bestiary-v561/**'
+      - '.github/workflows/release-bestiary-v561-certified.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: bestiary-v561-certified
+  cancel-in-progress: true
+
+jobs:
+  personal-minecraft-world:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up actual software OpenGL Minecraft runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth imagemagick libgl1-mesa-dri mesa-utils libxi6 libxrandr2 libxcursor1 libxinerama1 libxxf86vm1 libasound2t64
+          python -m pip install 'minecraft-launcher-lib==8.0' 'psutil>=6,<8'
+      - name: Prove Mesa software graphics can render Minecraft
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1280x800x24' env LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=4.5 GALLIUM_DRIVER=llvmpipe glxinfo -B | tee mesa-opengl.txt
+          grep -qi llvmpipe mesa-opengl.txt
+      - name: Run local-only Fabric JAR in real Minecraft world
+        shell: bash
+        env:
+          BENCH_ROOT: ${{ runner.temp }}/bestiary-561-personal-world
+          BENCH_REPORT: benchmark-output
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-output
+          timeout 38m xvfb-run -a -s '-screen 0 1280x800x24' python bestiary-v561/benchmark_personal_fabric.py 2>&1 | tee minecraft-benchmark.log
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -F 'QA PASS: Local Fabric JAR recognized by real Minecraft, server world joined and stable 30s' minecraft-benchmark.log
+          python - <<'PY'
+          import json
+          report=json.load(open('benchmark-output/report.json',encoding='utf8'))
+          assert report['version']=='5.6.1' and report['profile']=='personal-fabric-local-only'
+          assert report['results'] and all(x['local_fabric_mod_loaded'] and x['server_join_verified'] and x['stable_30s'] and not x['fatal_log_markers'] for x in report['results'])
+          PY
+      - name: Upload in-game benchmark logs and performance metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bestiary-561-Real-Personal-Fabric-World
+          path: |
+            benchmark-output/
+            minecraft-benchmark.log
+            mesa-opengl.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 100
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build Bestiary Skin Bridge
+        working-directory: bestiary-skin-bridge
+        shell: pwsh
+        run: gradle build --stacktrace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build stable 5.6.1 and run native Electron and mod installer QA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./bestiary-v561/build_stable.ps1 *>&1 | Tee-Object -FilePath 'ci-v561-stable.log'
+          if ($LASTEXITCODE -ne 0) { throw 'Stable 5.6.1 build/QA failed.' }
+          $features=Get-Content 'build-output-v561/feature-contract.txt' -Raw
+          foreach ($flag in @(
+            'version=5.6.1',
+            'officialOnlyPolicy=true',
+            'localDragDropOnly=true',
+            'osBackedDragDropE2E=true',
+            'offlineAuthPreserved=true',
+            'microsoftAuthPreserved=true',
+            'stableRelease=true'
+          )) {
+            if (-not $features.Contains($flag)) { throw "Feature contract missing: $flag" }
+          }
+          $ui=Get-Content 'build-output-v561/qa-create-v561.log' -Raw
+          if (-not $ui.Contains('QA PASS: OS-backed File DataTransfer triggers real Electron React onDrop')) { throw 'OS-backed drag/drop E2E not proven' }
+          if (-not $ui.Contains('QA PASS: Offline/Local mode, Microsoft login IPC preserved')) { throw 'Auth regression not proven' }
+          $mods=Get-Content 'build-output-v561/qa-local-v561.log' -Raw
+          if (-not $mods.Contains('QA PASS: manual local JAR/ZIP install')) { throw 'Local-only import regression not proven' }
+      - name: Upload stable Windows installer and test evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-Windows-5.6.1-VERIFIED
+          path: |
+            build-output-v561/BestiaryLauncher-Setup-5.6.1.exe
+            build-output-v561/BestiaryLauncher-Setup-5.6.1-SHA256.txt
+            build-output-v561/feature-contract.txt
+            build-output-v561/qa-quality-v561.log
+            build-output-v561/qa-runtime-v561.log
+            build-output-v561/qa-local-v561.log
+            build-output-v561/qa-create-v561.log
+            build-output-v561/qa-neoforge-install-v561.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BestiaryLauncher-561-FAILURE
+          path: |
+            ci-v561-stable.log
+            qa-quality-v561.log
+            qa-local-v561.log
+            qa-runtime-v561.log
+            qa-create-v561.log
+            qa-neoforge-install-v561.log
+          if-no-files-found: ignore
+
+  publish:
+    needs: [windows-installer, personal-minecraft-world]
+    if: ${{ needs.windows-installer.result == 'success' && needs.personal-minecraft-world.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: launcher-v5.6.1
+      EXE: BestiaryLauncher-Setup-5.6.1.exe
+    steps:
+      - name: Download exact artifacts from both passing jobs and verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/installer release/game
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name BestiaryLauncher-Windows-5.6.1-VERIFIED --dir release/installer
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name Bestiary-561-Real-Personal-Fabric-World --dir release/game
+          sha="$(sha256sum "release/installer/$EXE" | cut -d' ' -f1)"
+          expected="$(tr -d '\r' < release/installer/BestiaryLauncher-Setup-5.6.1-SHA256.txt | awk 'NR==1 {print tolower($1)}')"
+          test "$sha" = "$expected"
+          for flag in version=5.6.1 osBackedDragDropE2E=true stableRelease=true officialOnlyPolicy=true offlineAuthPreserved=true microsoftAuthPreserved=true; do
+            grep -Fx "$flag" <(tr -d '\r' < release/installer/feature-contract.txt)
+          done
+          grep -F 'QA PASS: OS-backed File DataTransfer triggers real Electron React onDrop' release/installer/qa-create-v561.log
+          grep -F 'QA PASS: Offline/Local mode, Microsoft login IPC preserved' release/installer/qa-create-v561.log
+          grep -F 'QA PASS: manual local JAR/ZIP install' release/installer/qa-local-v561.log
+          grep -F 'QA PASS: Local Fabric JAR recognized by real Minecraft' release/game/minecraft-benchmark.log
+          python3 - <<'PY'
+          import json
+          j=json.load(open('release/game/benchmark-output/report.json',encoding='utf8'))
+          assert j['version']=='5.6.1' and j['results']
+          assert all(x['local_fabric_mod_loaded'] and x['server_join_verified'] and x['stable_30s'] for x in j['results'])
+          PY
+          echo "RELEASE_SHA256=$sha" >> "$GITHUB_ENV"
+      - name: Publish immutable verified 5.6.1 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release tag exists: refusing overwrite" >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            "release/installer/$EXE" \
+            release/installer/BestiaryLauncher-Setup-5.6.1-SHA256.txt \
+            release/game/benchmark-output/report.json#Bestiary-5.6.1-Local-Mod-World-QA.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'Bestiary Launcher 5.6.1 - Local Modpacks and Java Runtime' \
+            --notes 'Stable 5.6.1: per-instance Java/RAM, native local JAR/ZIP drag-drop, independent personal mods and options.txt. SVFrame Official Full/Lite remains Manager-controlled; Local/Offline and Microsoft authentication services preserved. Windows Electron QA verifies disk-backed File DragEvent plus OS file picker, mod import and NeoForge install. Real Minecraft Fabric 1.21.1 world join validated with a local mod JAR on software Mesa. Microsoft live account sign-in and hardware FPS were not measured; no claim of live Microsoft credential testing.'
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$EXE" --dir verification
+          actual="$(sha256sum "verification/$EXE" | cut -d' ' -f1)"
+          test "$actual" = "$RELEASE_SHA256"
+          echo "QA_RELEASE_VERIFIED: sha256=$actual"
